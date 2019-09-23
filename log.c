@@ -7,10 +7,9 @@ void LOG_Frag_f(q2_server_t *srv)
 
 void LOG_Chat_f(q2_server_t *srv)
 {
-	char *sql, *string;
+	char *sql;
 	MYSQL_STMT *st;
 	MYSQL_BIND params[2];
-	int status, value;
 	uint8_t cl;
 	char *str;
 
