@@ -49,6 +49,12 @@
                             							
                             <tool id="cdt.managedbuild.tool.gnu.c.compiler.base.844283420" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
                                 								
+                                <option id="gnu.c.compiler.option.include.paths.1651332590" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+                                    									
+                                    <listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
+                                    								
+                                </option>
+                                								
                                 <inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1245880116" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
                                 							
                             </tool>
@@ -81,7 +87,7 @@
                         						
                         <tool id="cdt.managedbuild.tool.gnu.c.compiler.base.844283420.506987875" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base.844283420">
                             							
-                            <option id="gnu.c.compiler.option.include.paths.1821926608" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+                            <option id="gnu.c.compiler.option.include.paths.1821926608" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
                                 								
                                 <listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
                                 							

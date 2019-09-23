@@ -16,6 +16,7 @@
 #else
 #include <dlfcn.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -28,12 +29,25 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+#include <errno.h>
+
 #define PORT		9988
 #define MAXLINE 	1390
 #define CONFIGFILE	"q2a.ini"
+#define VER_REQ     0
+
+#define MAX_STRING_CHARS	1024
+#define MAX_TELE_NAME       15
 
 typedef unsigned char byte;
 
+#define RFL_FRAGS      1 << 0 	// 1
+#define RFL_CHAT       1 << 1	// 2
+#define RFL_TELEPORT   1 << 2	// 4
+#define RFL_INVITE     1 << 3	// 8
+#define RFL_FIND       1 << 4	// 16
+#define RFL_WHOIS      1 << 5	// 32
+#define RFL_DEBUG      1 << 11	// 2047
 
 /**
  * Each server message
@@ -44,6 +58,15 @@ struct message {
 	size_t length;
 	struct message *next;
 };
+
+
+typedef struct {
+        size_t         length;
+        uint32_t       index;
+        byte           data[0xffff];
+} msg_buffer_t;
+
+msg_buffer_t msg;
 
 
 /**
@@ -62,24 +85,89 @@ typedef struct {
  * Represents a server record in the database. For speed sake, these records are
  * loaded into these structures. When user updates the website, these are reloaded
  */
-typedef struct {
+struct q2_server_s {
 	uint32_t id;			// primary key in database table
 	uint32_t key;			// auth key, sent with every msg
-	byte ip[4];
+	//byte ip[4];
+	char ip[INET_ADDRSTRLEN];
 	uint16_t port;			// default 27910
 	char password[30];		// rcon password
 	char map[20];			// the current map name
 	uint8_t maxclients;		// 256 max in q2 protocol
 	uint32_t flags;			//
 	char name[50];
-	char teleportname[15];
+	char teleportname[MAX_TELE_NAME];
 	long lastcontact;		// when did we last see this server?
 	bool enabled;			// owner wants it used
 	bool authorized;		// confirmed legit and can be used
-	struct q2_server_t	*next;		// next server entry
-} q2_server_t;
+	int sockfd;
+	struct addrinfo *addr;
+	size_t addrlen;
+	msg_buffer_t msg;
+	struct q2_server_s  *head;      // first server in the list
+	struct q2_server_s	*next;		// next server entry
+	MYSQL *db;              // this server's database connection
+};
+
+typedef struct q2_server_s q2_server_t;
+
+/**
+ * Commands sent from q2admin game library.
+ * Has to match remote_cmd_t in g_remote.h from q2admin
+ */
+typedef enum {
+	CMD_REGISTER,		// server
+	CMD_QUIT,			// server
+	CMD_CONNECT,		// player
+	CMD_DISCONNECT,		// player
+	CMD_PLAYERLIST,
+	CMD_PLAYERUPDATE,
+	CMD_PRINT,
+	CMD_TELEPORT,
+	CMD_INVITE,
+	CMD_SEEN,
+	CMD_WHOIS,
+	CMD_PLAYERS,
+	CMD_FRAG,
+	CMD_MAP,
+	CMD_AUTHORIZE,
+	CMD_HEARTBEAT
+} server_cmd_t;
+
+q2a_config_t config;
+
+q2_server_t *server_list;
+GQueue *queue;
+bool threadrunning;
+MYSQL *db;
+int sockfd;
 
 
 extern bool threadrunning;
+
+void MSG_ReadData(void *out, size_t len);
+uint8_t MSG_ReadByte(void);
+int8_t MSG_ReadChar(void);
+uint16_t MSG_ReadShort(void);
+int16_t MSG_ReadWord(void);
+int32_t MSG_ReadLong(void);
+char *MSG_ReadString(void);
+
+void MSG_WriteByte(uint8_t b, msg_buffer_t *buf);
+void MSG_WriteShort(uint16_t s, msg_buffer_t *buf);
+void MSG_WriteLong(uint32_t l, msg_buffer_t *buf);
+void MSG_WriteString(const char *str, msg_buffer_t *buf);
+void MSG_WriteData(const void *data, size_t length, msg_buffer_t *buf);
+
+void SendRCON(q2_server_t *srv, const char *fmt, ...);
+
+void CMD_Teleport_f(q2_server_t *srv);
+void CMD_Register_f(q2_server_t *srv);
+
+q2_server_t *find_server(uint32_t key);
+q2_server_t *find_server_by_name(const char *name);
+
+void LOG_Frag_f(q2_server_t *srv);
+void LOG_Chat_f(q2_server_t *srv);
 
 #endif
