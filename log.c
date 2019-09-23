@@ -41,4 +41,6 @@ void LOG_Chat_f(q2_server_t *srv)
 	if (mysql_stmt_execute(st)) {
 		printf("%s\n", mysql_stmt_error(st));
 	}
+
+	mysql_stmt_close(st);
 }
