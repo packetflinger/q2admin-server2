@@ -86,27 +86,27 @@ typedef struct {
  * loaded into these structures. When user updates the website, these are reloaded
  */
 struct q2_server_s {
-	uint32_t id;			// primary key in database table
-	uint32_t key;			// auth key, sent with every msg
-	//byte ip[4];
+	uint32_t id;                   // primary key in database table
+	uint32_t key;                  // auth key, sent with every msg
 	char ip[INET_ADDRSTRLEN];
-	uint16_t port;			// default 27910
-	char password[30];		// rcon password
-	char map[20];			// the current map name
-	uint8_t maxclients;		// 256 max in q2 protocol
-	uint32_t flags;			//
+	uint16_t port;                 // default 27910
+	char password[30];             // rcon password
+	char map[20];                  // the current map name
+	uint8_t maxclients;            // 256 max in q2 protocol
+	uint32_t flags;                //
 	char name[50];
 	char teleportname[MAX_TELE_NAME];
-	long lastcontact;		// when did we last see this server?
-	bool enabled;			// owner wants it used
-	bool authorized;		// confirmed legit and can be used
-	int sockfd;
-	struct addrinfo *addr;
-	size_t addrlen;
-	msg_buffer_t msg;
-	struct q2_server_s  *head;      // first server in the list
-	struct q2_server_s	*next;		// next server entry
-	MYSQL *db;              // this server's database connection
+	long lastcontact;              // when did we last see this server?
+	bool enabled;                  // owner wants it used
+	bool authorized;               // confirmed legit and can be used
+	bool active;                   // server is online now
+	int sockfd;                    // dedicated socket for rcon commands
+	struct addrinfo *addr;         //
+	size_t addrlen;                // remove later
+	msg_buffer_t msg;              // remove later
+	struct q2_server_s *head;      // first server in the list
+	struct q2_server_s *next;      // next server entry
+	MYSQL *db;                     // this server's database connection
 };
 
 typedef struct q2_server_s q2_server_t;
