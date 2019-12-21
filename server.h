@@ -88,6 +88,7 @@ typedef struct {
 struct q2_server_s {
 	uint32_t id;                   // primary key in database table
 	uint32_t key;                  // auth key, sent with every msg
+	uint32_t version;              // which revision are we running?
 	char ip[INET_ADDRSTRLEN];
 	uint16_t port;                 // default 27910
 	char password[30];             // rcon password

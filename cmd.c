@@ -1,16 +1,27 @@
 #include "server.h"
 
 
+/**
+ * Q2 Server sends this when it comes online
+ */
 void CMD_Register_f(q2_server_t *srv)
 {
-	uint32_t version;
-
-	version = MSG_ReadLong();
+	srv->version = MSG_ReadLong();
 
 	// version too old, inform server, remove entry
-	if (VER_REQ > version) {
+	if (VER_REQ > srv->version) {
+		srv->enabled = false;
+		srv->active = false;
 		return;
 	}
+
+	srv->port = MSG_ReadShort();
+	srv->maxclients = MSG_ReadByte();
+	srv->password = MSG_ReadString();
+	srv->map = MSG_ReadString();
+
+	srv->active = true;
+	SendRCON(srv, "sv !remote_online");
 }
 
 /**
