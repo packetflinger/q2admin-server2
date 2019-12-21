@@ -21,7 +21,7 @@ void CMD_Register_f(q2_server_t *srv)
 	srv->map = MSG_ReadString();
 
 	srv->active = true;
-	SendRCON(srv, "sv !remote_online");
+	SendRCON(srv, CMD_ONLINE);
 }
 
 /**

@@ -39,6 +39,9 @@
 #define MAX_STRING_CHARS	1024
 #define MAX_TELE_NAME       15
 
+#define CMD_ONLINE		"sv !remote_online"
+
+
 typedef unsigned char byte;
 
 #define RFL_FRAGS      1 << 0 	// 1
