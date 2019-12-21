@@ -263,6 +263,7 @@ void SendRCON(q2_server_t *srv, const char *fmt, ...) {
 	len = strlen(str);
 
 	buf[0] = 0;
+
 	strcpy(buf, "\xff\xff\xff\xffrcon\x20");
 	strcat(buf, srv->password);
 	strcat(buf, "\x20");
@@ -287,8 +288,6 @@ void SendRCON(q2_server_t *srv, const char *fmt, ...) {
  */
 int main(int argc, char **argv)
 {
-	//char buffer[MAXLINE];
-	char *hello = "Hello from server";
 	struct sockaddr_in servaddr, cliaddr;
 	pthread_t threadid;
 	threadrunning = false;
@@ -336,22 +335,15 @@ int main(int argc, char **argv)
 
 	pthread_create(&threadid, NULL, ProcessQueue, NULL);
 
-	//buffer[0] = 0;
-
 	while (1) {
 
 		n = recvfrom(sockfd, (char *) msg.data, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr, &len);
 		msg.data[n] = 0;
 		msg.index = 0;
 
-		ProcessServerMessage();
-		// add incoming message to queue
-//		if (!threadrunning) {
-//			pthread_join(threadid, NULL);
-//		}
+		// decrypt it here
 
-		//sendto(sockfd, (const char *) hello, strlen(hello), MSG_CONFIRM, (const struct sockaddr *) &cliaddr, len);
-		//printf("Hello message sent.\n");
+		ProcessServerMessage();
 	}
 
 	return EXIT_SUCCESS;
