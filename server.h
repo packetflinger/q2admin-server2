@@ -111,9 +111,36 @@ struct q2_server_s {
 	struct q2_server_s *head;      // first server in the list
 	struct q2_server_s *next;      // next server entry
 	MYSQL *db;                     // this server's database connection
+	char encryption_key[1400];     // key for decrypting msgs
 };
 
 typedef struct q2_server_s q2_server_t;
+
+/**
+ * Means of death.
+ * MUST MATCH same enum in q2admin's g_remote.h
+ *
+ * This is no where near as granular as the MOD in the game mod,
+ * but there doesn't seem to be a way to get that information. We
+ * must resort to using what gun is in the attacker's hand at the
+ * time of the frag.
+ */
+typedef enum {
+	MOD_ENVIRO,		// world (falling, drowning, crushed, laser, etc)
+	MOD_BLASTER,
+	MOD_SHOTGUN,
+	MOD_SSG,
+	MOD_MACHINEGUN,
+	MOD_CHAINGUN,
+	MOD_GRENADE,
+	MOD_GRENADELAUNCHER,
+	MOD_HYPERBLASTER,
+	MOD_ROCKETLAUNCHER,
+	MOD_RAILGUN,
+	MOD_BFG,
+	MOD_OTHER		// unknown mod-specific custom weapon
+} mod_t;
+
 
 /**
  * Commands sent from q2admin game library.
@@ -167,6 +194,7 @@ void SendRCON(q2_server_t *srv, const char *fmt, ...);
 
 void CMD_Teleport_f(q2_server_t *srv);
 void CMD_Register_f(q2_server_t *srv);
+void CMD_Frag_f(q2_server_t *srv);
 
 q2_server_t *find_server(uint32_t key);
 q2_server_t *find_server_by_name(const char *name);

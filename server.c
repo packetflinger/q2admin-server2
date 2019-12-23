@@ -120,7 +120,8 @@ bool LoadServers()
 		strncpy(temp->teleportname, r[12], sizeof(temp->teleportname));
 		temp->lastcontact = atoi(r[15]);
 		strncpy(temp->map, r[16], sizeof(temp->map));
-		strncpy(temp->ip, r[17], sizeof(temp->ip));
+		strncpy(temp->ip, r[18], sizeof(temp->ip));
+		strncpy(temp->encryption_key, r[17], sizeof(temp->encryption_key));
 
 		memset(&hints, 0, sizeof(hints));
 		sprintf(strport, "%d", temp->port);
@@ -136,7 +137,7 @@ bool LoadServers()
 			continue;
 		}
 
-		printf("   * %s (%s) %s\n", temp->name, temp->teleportname, temp->ip);
+		printf("   - %s (%s) %s\n", temp->name, temp->teleportname, temp->ip);
 
 		// head
 		if (server_list == NULL) {
@@ -208,6 +209,17 @@ q2_server_t *find_server_by_name(const char *name)
 }
 
 /**
+ * XOR the current message buffer with the encryption key for this server.
+ */
+static void MSG_Decrypt(char* key) {
+	uint16_t i;
+
+	for (i=msg.index; i<msg.length; i++) {
+		msg.data[i] ^= key[i];
+	}
+}
+
+/**
  * Called for every datagram we receive.
  */
 void ProcessServerMessage()
@@ -225,6 +237,8 @@ void ProcessServerMessage()
 		return;
 	}
 
+	//MSG_Decrypt(server->encryption_key);
+
 	cmd = MSG_ReadByte();
 
 	switch (cmd) {
@@ -241,6 +255,7 @@ void ProcessServerMessage()
 		break;
 	case CMD_FRAG:
 		printf("FRAG\n");
+		CMD_Frag_f(server);
 		break;
 	case CMD_TELEPORT:
 		CMD_Teleport_f(server);
