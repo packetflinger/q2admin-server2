@@ -202,4 +202,6 @@ q2_server_t *find_server_by_name(const char *name);
 void LOG_Frag_f(q2_server_t *srv);
 void LOG_Chat_f(q2_server_t *srv);
 
+uint16_t TP_GetServers(q2_server_t srv, char *buffer);
+
 #endif
