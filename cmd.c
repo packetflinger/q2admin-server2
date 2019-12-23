@@ -1,6 +1,5 @@
 #include "server.h"
 
-
 /**
  * Q2 Server sends this when it comes online
  */
@@ -17,8 +16,8 @@ void CMD_Register_f(q2_server_t *srv)
 
 	srv->port = MSG_ReadShort();
 	srv->maxclients = MSG_ReadByte();
-	srv->password = MSG_ReadString();
-	srv->map = MSG_ReadString();
+	strncpy(srv->password, MSG_ReadString(), sizeof(srv->password));
+	strncpy(srv->map, MSG_ReadString(), sizeof(srv->map));
 
 	srv->active = true;
 	SendRCON(srv, CMD_ONLINE);
@@ -45,7 +44,7 @@ void CMD_Teleport_f(q2_server_t *srv)
 			SendRCON(srv, "sv !say_person CL %d Unknown server: \"%s\"", player, target);
 		}
 	} else {
-		SendRCON(srv, "say player %d looking for servers", player);
+		//SendRCON(srv, "say player %d looking for servers", player);
 	}
 }
 
@@ -67,4 +66,12 @@ void CMD_Invite_f(q2_server_t *srv)
 			SendRCON(server, "say You're Invited to %s. type \"!teleport %s\"", srv->name, srv->teleportname);
 		}
 	}
+}
+
+/**
+ * Called when a frag happens on a server
+ */
+void CMD_Frag_f(q2_server_t *srv)
+{
+	LOG_Frag_f(srv);
 }
