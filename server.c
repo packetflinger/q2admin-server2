@@ -271,6 +271,10 @@ void ProcessServerMessage()
 		printf("PCON\n");
 		CMD_PlayerConnect_f(server);
 		break;
+	case CMD_DISCONNECT:	// player
+		printf("PDISCON\n");
+		CMD_PlayerDisconnect_f(server);
+		break;
 	case CMD_PRINT:
 		printf("PRINT\n");
 		LOG_Chat_f(server);

@@ -38,6 +38,8 @@
 
 #define MAX_STRING_CHARS	1024
 #define MAX_TELE_NAME       15
+#define MAX_NAME_CHARS		15	// playername
+#define MAX_USERINFO_CHARS	512
 
 #define CMD_ONLINE		"sv !remote_online"
 
@@ -85,6 +87,16 @@ typedef struct {
 
 
 /**
+ * Represents
+ */
+typedef struct {
+	uint8_t client_id;
+	uint16_t ping;		// at the time of the message
+	char name[MAX_NAME_CHARS];
+	char userinfo[MAX_USERINFO_CHARS];
+} q2_player_t;
+
+/**
  * Represents a server record in the database. For speed sake, these records are
  * loaded into these structures. When user updates the website, these are reloaded
  */
@@ -113,6 +125,7 @@ struct q2_server_s {
 	struct q2_server_s *next;      // next server entry
 	MYSQL *db;                     // this server's database connection
 	char encryption_key[1400];     // key for decrypting msgs
+	q2_player_t players[256];
 };
 
 typedef struct q2_server_s q2_server_t;
@@ -197,6 +210,7 @@ void CMD_Teleport_f(q2_server_t *srv);
 void CMD_Register_f(q2_server_t *srv);
 void CMD_Frag_f(q2_server_t *srv);
 void CMD_PlayerConnect_f(q2_server_t *srv);
+void CMD_PlayerDisconnect_f(q2_server_t *srv);
 
 q2_server_t *find_server(uint32_t key);
 q2_server_t *find_server_by_name(const char *name);

@@ -88,6 +88,7 @@ void CMD_PlayerConnect_f(q2_server_t *srv)
 	uint8_t client;
 	uint16_t ping;
 	char *userinfo;
+	q2_player_t *p;
 
 	client = MSG_ReadByte();
 	ping = MSG_ReadShort();
@@ -95,5 +96,27 @@ void CMD_PlayerConnect_f(q2_server_t *srv)
 
 	srv->playercount++;
 
-	// add to list of players here
+	p = &srv->players[client];
+	memset(&p, 0, sizeof(q2_player_t));
+
+	p->client_id = client;
+	p->ping = ping;
+	strncpy(p->userinfo, userinfo, sizeof(p->userinfo));
+}
+
+
+/**
+ * A player just disconnected
+ */
+void CMD_PlayerDisconnect_f(q2_server_t *srv)
+{
+	uint8_t client;
+	q2_player_t *p;
+
+	client = MSG_ReadByte();
+
+	srv->playercount--;
+
+	p = &srv->players[client];
+	memset(&p, 0, sizeof(q2_player_t));
 }
