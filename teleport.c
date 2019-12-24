@@ -5,23 +5,41 @@
  * to send to client
  *
  */
-uint16_t TP_GetServers(q2_server_t srv, char *buffer)
+void TP_GetServers(q2_server_t *srv, uint8_t player, char *target)
 {
+	q2_server_t *server;
 	static MYSQL_RES *res;
 	static MYSQL_ROW r;
 
-	buffer[0] = 0;
-	strcat(buffer, "Available servers:\n");
+	SendRCON(srv, "sv !say_person CL %d Available servers:\n", player);
 
-	if (mysql_query(db, "SELECT id, teleportname, maxclients, map FROM server WHERE enabled = 1 AND authorized = 1")) {
-		printf("%s\n", mysql_error(db));
-		return 0;
+	if (mysql_query(srv->db, "SELECT id, teleportname, maxclients, map FROM server WHERE enabled = 1 AND authorized = 1")) {
+		printf("%s\n", mysql_error(srv->db));
+		return;
 	}
 
-	res = mysql_store_result(db);
+	res = mysql_store_result(srv->db);
+
 	while ((r = mysql_fetch_row(res))) {
-		strcat(buffer, va("%s (%s) x/%d - *playernames here*\n", r[1], r[3], atoi(r[2])));
+		server = find_server(atoi(r[0]));
+		if (server) {
+			/*SendRCON(
+					srv,
+					"sv !say_person CL %d %s (%s) %d/%d - *playerlist here*\n",
+					player,
+					r[1],
+					r[3],
+					server->playercount,
+					atoi(r[2])
+			);*/
+			printf(
+					"sv !say_person CL %d %s (%s) %d/%d - *playerlist here*\n",
+					player,
+					r[1],
+					r[3],
+					server->playercount,
+					atoi(r[2])
+			);
+		}
 	}
-
-	return strlen(buffer);
 }

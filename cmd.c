@@ -29,6 +29,7 @@ void CMD_Register_f(q2_server_t *srv)
  */
 void CMD_Teleport_f(q2_server_t *srv)
 {
+	char buffer[2000];
 	uint8_t player;
 	char *target;
 	q2_server_t *targetsrv;
@@ -45,6 +46,8 @@ void CMD_Teleport_f(q2_server_t *srv)
 		}
 	} else {
 		//SendRCON(srv, "say player %d looking for servers", player);
+		TP_GetServers(srv, player, target);
+		//SendRCON(srv, "sv !say_person CL %d \"%s\"", player, buffer);
 	}
 }
 
@@ -75,3 +78,4 @@ void CMD_Frag_f(q2_server_t *srv)
 {
 	LOG_Frag_f(srv);
 }
+
