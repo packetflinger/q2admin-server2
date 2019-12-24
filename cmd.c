@@ -79,3 +79,21 @@ void CMD_Frag_f(q2_server_t *srv)
 	LOG_Frag_f(srv);
 }
 
+
+/**
+ * A player just connected to this server
+ */
+void CMD_PlayerConnect_f(q2_server_t *srv)
+{
+	uint8_t client;
+	uint16_t ping;
+	char *userinfo;
+
+	client = MSG_ReadByte();
+	ping = MSG_ReadShort();
+	userinfo = MSG_ReadString();
+
+	srv->playercount++;
+
+	// add to list of players here
+}

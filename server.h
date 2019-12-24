@@ -96,6 +96,7 @@ struct q2_server_s {
 	uint16_t port;                 // default 27910
 	char password[30];             // rcon password
 	char map[20];                  // the current map name
+	uint8_t playercount;
 	uint8_t maxclients;            // 256 max in q2 protocol
 	uint32_t flags;                //
 	char name[50];
@@ -195,6 +196,7 @@ void SendRCON(q2_server_t *srv, const char *fmt, ...);
 void CMD_Teleport_f(q2_server_t *srv);
 void CMD_Register_f(q2_server_t *srv);
 void CMD_Frag_f(q2_server_t *srv);
+void CMD_PlayerConnect_f(q2_server_t *srv);
 
 q2_server_t *find_server(uint32_t key);
 q2_server_t *find_server_by_name(const char *name);
@@ -202,6 +204,8 @@ q2_server_t *find_server_by_name(const char *name);
 void LOG_Frag_f(q2_server_t *srv);
 void LOG_Chat_f(q2_server_t *srv);
 
-uint16_t TP_GetServers(q2_server_t srv, char *buffer);
+char *va(const char *format, ...);
+
+void TP_GetServers(q2_server_t *srv, uint8_t player, char *target);
 
 #endif

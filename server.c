@@ -68,6 +68,24 @@ char *getNow(MYSQL *m)
 }
 
 /**
+ * Variable assignment, just makes building strings easier
+ */
+char *va(const char *format, ...) {
+	static char strings[8][MAX_STRING_CHARS];
+	static uint16_t index;
+
+	char *string = strings[index++ % 8];
+
+	va_list args;
+
+	va_start(args, format);
+	vsnprintf(string, MAX_STRING_CHARS, format, args);
+	va_end(args);
+
+	return string;
+}
+
+/**
  * Free memory used by the servers linked-list. Called when list is updated
  */
 void FreeServers(q2_server_t *listhead)
@@ -248,6 +266,10 @@ void ProcessServerMessage()
 		break;
 	case CMD_QUIT:
 		printf("QUIT\n");
+		break;
+	case CMD_CONNECT:	// player
+		printf("PCON\n");
+		CMD_PlayerConnect_f(server);
 		break;
 	case CMD_PRINT:
 		printf("PRINT\n");
