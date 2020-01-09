@@ -2,6 +2,7 @@
 
 void LOG_Frag_f(q2_server_t *srv)
 {
+	/*
 	char *sql;
 	MYSQL_STMT *st;
 	MYSQL_BIND params[5];
@@ -51,10 +52,12 @@ void LOG_Frag_f(q2_server_t *srv)
 	}
 
 	mysql_stmt_close(st);
+	*/
 }
 
 void LOG_Chat_f(q2_server_t *srv)
 {
+	/*
 	char *sql;
 	MYSQL_STMT *st;
 	MYSQL_BIND params[4];
@@ -98,6 +101,7 @@ void LOG_Chat_f(q2_server_t *srv)
 	}
 
 	mysql_stmt_close(st);
+	*/
 }
 
 

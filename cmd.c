@@ -5,6 +5,7 @@
  */
 void CMD_Register_f(q2_server_t *srv)
 {
+	/*
 	srv->version = MSG_ReadLong();
 
 	// version too old, inform server, remove entry
@@ -21,6 +22,7 @@ void CMD_Register_f(q2_server_t *srv)
 
 	srv->active = true;
 	SendRCON(srv, CMD_ONLINE);
+	*/
 }
 
 /**
@@ -29,6 +31,7 @@ void CMD_Register_f(q2_server_t *srv)
  */
 void CMD_Teleport_f(q2_server_t *srv)
 {
+	/*
 	char buffer[2000];
 	uint8_t player;
 	char *target;
@@ -49,6 +52,7 @@ void CMD_Teleport_f(q2_server_t *srv)
 		TP_GetServers(srv, player, target);
 		//SendRCON(srv, "sv !say_person CL %d \"%s\"", player, buffer);
 	}
+	*/
 }
 
 
@@ -57,6 +61,7 @@ void CMD_Teleport_f(q2_server_t *srv)
  */
 void CMD_Invite_f(q2_server_t *srv)
 {
+	/*
 	uint8_t player;
 	char *target;
 	q2_server_t *server = srv->head;
@@ -69,6 +74,7 @@ void CMD_Invite_f(q2_server_t *srv)
 			SendRCON(server, "say You're Invited to %s. type \"!teleport %s\"", srv->name, srv->teleportname);
 		}
 	}
+	*/
 }
 
 /**
@@ -85,6 +91,7 @@ void CMD_Frag_f(q2_server_t *srv)
  */
 void CMD_PlayerConnect_f(q2_server_t *srv)
 {
+	/*
 	uint8_t client;
 	uint16_t ping;
 	char *userinfo;
@@ -102,6 +109,10 @@ void CMD_PlayerConnect_f(q2_server_t *srv)
 	p->client_id = client;
 	p->ping = ping;
 	strncpy(p->userinfo, userinfo, sizeof(p->userinfo));
+	strncpy(p->name, Info_ValueForKey(userinfo, "name"), sizeof(p->name));
+
+	printf("Just added: %d:%d\n", p->client_id, p->ping);
+	*/
 }
 
 
@@ -110,6 +121,7 @@ void CMD_PlayerConnect_f(q2_server_t *srv)
  */
 void CMD_PlayerDisconnect_f(q2_server_t *srv)
 {
+	/*
 	uint8_t client;
 	q2_player_t *p;
 
@@ -119,4 +131,5 @@ void CMD_PlayerDisconnect_f(q2_server_t *srv)
 
 	p = &srv->players[client];
 	memset(&p, 0, sizeof(q2_player_t));
+	*/
 }

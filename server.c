@@ -171,25 +171,6 @@ bool LoadServers()
 	return true;
 }
 
-void *ProcessQueue(void *arg)
-{
-	threadrunning = true;
-	while (!g_queue_is_empty(queue)) {
-
-	}
-
-	threadrunning = false;
-	return NULL;
-}
-
-/**
- * Add to the end of the message queue
- */
-void push(struct message *queue, const char *buf, size_t len)
-{
-
-}
-
 /**
  * Get the server entry based on the supplied key
  */
@@ -227,6 +208,57 @@ q2_server_t *find_server_by_name(const char *name)
 }
 
 /**
+ * Send a reply to a q2 server PING request
+ */
+static void Pong(q2_server_t *srv)
+{
+	MSG_WriteByte(SCMD_PONG, &srv->msg);
+	SendBuffer(srv);
+}
+
+/**
+ * Pick out a value for a givin key in the userinfo string
+ */
+char *Info_ValueForKey(char *s, char *key)
+{
+    char pkey[512];
+    static char value[2][512]; // use two buffers so compares
+    // work without stomping on each other
+    static int valueindex;
+    char *o;
+
+    valueindex ^= 1;
+    if (*s == '\\')
+        s++;
+    while (1) {
+        o = pkey;
+        while (*s != '\\') {
+            if (!*s)
+                return "";
+            *o++ = *s++;
+        }
+        *o = 0;
+        s++;
+
+        o = value[valueindex];
+
+        while (*s != '\\' && *s) {
+            if (!*s)
+                return "";
+            *o++ = *s++;
+        }
+        *o = 0;
+
+        if (!strcmp(key, pkey))
+            return value[valueindex];
+
+        if (!*s)
+            return "";
+        s++;
+    }
+}
+
+/**
  * XOR the current message buffer with the encryption key for this server.
  */
 static void MSG_Decrypt(char* key) {
@@ -237,91 +269,175 @@ static void MSG_Decrypt(char* key) {
 	}
 }
 
+
 /**
- * Called for every datagram we receive.
+ * As clients disconnect, new connections use their threadId.
+ * Keeps them contiguous
  */
-void ProcessServerMessage()
+uint32_t find_available_thread_slot(void)
 {
-	uint32_t key;
-	q2_server_t *server;
+	uint32_t i;
+
+	for (i = 0; i < MAX_THREADS; i++) {
+		// if that thread is null, let's use the space
+		if (!threads[i]) {
+			return i;
+		}
+	}
+
+	// getting here means we're full, no more threads allowed
+	return -1;
+}
+
+/**
+ * Each q2 server connection gets one of these threads
+ */
+void *ServerThread(void *arg)
+{
+	msg_buffer_t msg; // for receiving data only
+	uint32_t _ret;
+	uint32_t serverkey, q2arevision;
+	uint16_t port;
+	uint8_t maxclients;
+	connection_t _q2con = *(connection_t *) arg;
+	q2_server_t *q2;
 	byte cmd;
-	uint32_t version;
+	ssize_t bytessent;
 
-	key = MSG_ReadLong();
-	server = find_server(key);
+	/*
+	struct timeval _tv;
 
-	// not a valid server, just move on with life
-	if (!server) {
+	_tv.tv_sec = 10;
+	_tv.tv_usec = 0;
+	setsockopt(_q2con.socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&_tv, sizeof(_tv));
+	*/
+
+	memset(&msg, 0, sizeof(msg_buffer_t));
+
+	// figure out which server connection this should go to
+	_ret = recv(_q2con.socket, &msg.data, sizeof(msg.data), 0);
+	if (_ret < 0) {
+		perror("Server thread recv");
+		return NULL;
+	}
+
+	// first thing should be hello
+	if (MSG_ReadByte(&msg) != CMD_HELLO) {
+		printf("thread[%d] - protocol error, not a real client\n", _q2con.thread_id);
+		return NULL;
+	}
+
+	serverkey = MSG_ReadLong(&msg);
+	q2arevision = MSG_ReadLong(&msg);
+	port = MSG_ReadShort(&msg);
+	maxclients = MSG_ReadByte(&msg);
+
+	printf("thread[%d] - server: %d\n", _q2con.thread_id, serverkey);
+
+	// find the server entry that matches supplied serverkey
+	for (server_list = server_list->head; server_list; server_list = server_list->next) {
+		if (serverkey == server_list->key) {
+			q2 = server_list;
+			q2->socket = _q2con.socket;
+			q2->connected = true;
+			q2->port = port;
+			q2->maxclients = maxclients;
+
+			// q2 server won't send any more data until it receives this ACK
+			MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
+			SendBuffer(q2);
+
+			break;
+		}
+	}
+
+	// not a valid server
+	if (!q2) {
+		printf("Invalid serverkey, closing connection\n");
+		close(_q2con.socket);
+		return NULL;
+	}
+
+	// main server connection loop
+	while (true) {
+		memset(&msg, 0, sizeof(msg_buffer_t));
+		errno = 0;
+
+		// read data from q2 server
+		msg.length = recv(q2->socket, &msg.data, sizeof(msg.data), 0);
+		if (msg.length < 0) {
+			perror(va("recv (server %d)",q2->key));
+		}
+
+		if (errno) {
+			printf("RECV error: %d - %s\n", errno, strerror(errno));
+			CloseConnection(q2);
+			break;
+		}
+
+		// keep parsing msgs while data is in the buffer
+		while (msg.index < msg.length) {
+
+			cmd = MSG_ReadByte(&msg);
+
+			switch(cmd) {
+			case CMD_QUIT:
+				CloseConnection(q2);
+				break;
+			case CMD_PING:
+				Pong(q2);
+				break;
+			case CMD_PRINT:
+				ParsePrint(q2, &msg);
+				break;
+			case CMD_COMMAND:
+				ParseCommand(q2, &msg);
+				break;
+			case CMD_CONNECT:
+				ParsePlayerConnect(q2, &msg);
+				break;
+			case CMD_PLAYERUPDATE:
+				ParsePlayerUpdate(q2, &msg);
+				break;
+			case CMD_DISCONNECT:
+				ParsePlayerDisconnect(q2, &msg);
+				break;
+			default:
+				printf("cmd: %d\n", cmd);
+			}
+		}
+
+		if (!q2->connected) {
+			break;
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * Send the contents of the message buffer to the q2 server
+ */
+void SendBuffer(q2_server_t *srv)
+{
+	if (!srv->connected) {
 		return;
 	}
 
-	//MSG_Decrypt(server->encryption_key);
-
-	cmd = MSG_ReadByte();
-
-	switch (cmd) {
-	case CMD_REGISTER:
-		printf("REG\n");
-		CMD_Register_f(server);
-		break;
-	case CMD_QUIT:
-		printf("QUIT\n");
-		break;
-	case CMD_CONNECT:	// player
-		printf("PCON\n");
-		CMD_PlayerConnect_f(server);
-		break;
-	case CMD_DISCONNECT:	// player
-		printf("PDISCON\n");
-		CMD_PlayerDisconnect_f(server);
-		break;
-	case CMD_PRINT:
-		printf("PRINT\n");
-		LOG_Chat_f(server);
-		break;
-	case CMD_FRAG:
-		printf("FRAG\n");
-		CMD_Frag_f(server);
-		break;
-	case CMD_TELEPORT:
-		CMD_Teleport_f(server);
-		break;
+	if (!srv->msg.length) {
+		return;
 	}
+
+	send(srv->socket, srv->msg.data, srv->msg.length, 0);
+	memset(&srv->msg, 0, sizeof(msg_buffer_t));
+
+	return;
 }
 
-void SendRCON(q2_server_t *srv, const char *fmt, ...) {
-	uint16_t i;
-	size_t len;
-	char str[MAX_STRING_CHARS];
-	va_list argptr;
-
-	char buf[MAX_STRING_CHARS + 9];
-
-	va_start(argptr, fmt);
-    len = vsnprintf(str, sizeof(str), fmt, argptr);
-	va_end(argptr);
-
-	len = strlen(str);
-
-	buf[0] = 0;
-
-	strcpy(buf, "\xff\xff\xff\xffrcon\x20");
-	strcat(buf, srv->password);
-	strcat(buf, "\x20");
-	strcat(buf, str);
-	strcat(buf, "\x00");
-
-	int r = sendto(
-		srv->sockfd,
-		buf,
-		strlen(buf),
-		MSG_DONTWAIT,
-		srv->addr->ai_addr,
-		srv->addr->ai_addrlen
-	);
-
-	memset(&srv->msg, 0, sizeof(msg_buffer_t));
-	buf[0] = 0;
+void CloseConnection(q2_server_t *srv)
+{
+	close(srv->socket);
+	srv->connected = false;
 }
 
 /**
@@ -329,9 +445,15 @@ void SendRCON(q2_server_t *srv, const char *fmt, ...) {
  */
 int main(int argc, char **argv)
 {
+	uint32_t ret;
 	struct sockaddr_in servaddr, cliaddr;
+	uint32_t clin_size;
 	pthread_t threadid;
+	connection_t conn;
+
 	threadrunning = false;
+
+	memset(&threads, 0, sizeof(pthread_t) * MAX_THREADS);
 
 	// load the config
 	LoadConfig(CONFIGFILE);
@@ -344,16 +466,12 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	queue = g_queue_new();
-
 	server_list = 0;
 
 	LoadServers();
 
-	printf("Listening for Quake 2 traffic on udp/%d\n", config.port);
-
 	// Creating socket file descriptor
-	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("socket creation failed");
 		exit(EXIT_FAILURE);
 	}
@@ -372,19 +490,29 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	int len, n;
+	// start listening
+	ret = listen(sockfd, 100);
+	if (ret < 0) {
+		perror("listen failed");
+		exit(EXIT_FAILURE);
+	}
 
-	pthread_create(&threadid, NULL, ProcessQueue, NULL);
+	printf("Listening on tcp/%d\n", config.port);
 
-	while (1) {
+	// listen for new connections
+	while (true) {
+		newsockfd = accept(sockfd, (struct sockaddr *) &cliaddr, &clin_size);
+		if (newsockfd == -1) {
+			perror("Accept");
+			continue;
+		}
 
-		n = recvfrom(sockfd, (char *) msg.data, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cliaddr, &len);
-		msg.data[n] = 0;
-		msg.index = 0;
+		memset(&conn, 0, sizeof(connection_t));
+		conn.socket = newsockfd;
+		conn.thread_id = find_available_thread_slot();
 
-		// decrypt it here
-
-		ProcessServerMessage();
+		// hand connection off to new thread
+		ret = pthread_create(&threads[conn.thread_id], NULL, ServerThread, &conn);
 	}
 
 	return EXIT_SUCCESS;

@@ -31,6 +31,8 @@
 
 #include <errno.h>
 
+#define ROUNDF(f,c) (((float)((int)((f) * (c))) / (c)))
+
 #define PORT		9988
 #define MAXLINE 	1390
 #define CONFIGFILE	"q2a.ini"
@@ -40,6 +42,7 @@
 #define MAX_TELE_NAME       15
 #define MAX_NAME_CHARS		15	// playername
 #define MAX_USERINFO_CHARS	512
+#define MAX_THREADS         256
 
 #define CMD_ONLINE		"sv !remote_online"
 
@@ -87,20 +90,35 @@ typedef struct {
 
 
 /**
- * Represents
+ * Represents an active player
  */
 typedef struct {
 	uint8_t client_id;
-	uint16_t ping;		// at the time of the message
 	char name[MAX_NAME_CHARS];
 	char userinfo[MAX_USERINFO_CHARS];
+	uint32_t kill_count;
+	uint32_t death_count;
+	uint32_t suicide_count;
 } q2_player_t;
+
+
+/**
+ * This represents a new q2 server connection,
+ * before we know which server it belongs with
+ */
+typedef struct {
+	uint32_t thread_id;
+	uint32_t socket;
+} connection_t;
+
 
 /**
  * Represents a server record in the database. For speed sake, these records are
  * loaded into these structures. When user updates the website, these are reloaded
  */
 struct q2_server_s {
+	bool connected;
+	uint32_t socket;
 	uint32_t id;                   // primary key in database table
 	uint32_t key;                  // auth key, sent with every msg
 	uint32_t version;              // which revision are we running?
@@ -158,26 +176,50 @@ typedef enum {
 
 /**
  * Commands sent from q2admin game library.
- * Has to match remote_cmd_t in g_remote.h from q2admin
+ * Has to match ra_client_cmd_t in g_remote.h from q2admin
+ *
+ * Major client (q2server) to server (q2admin server)
+ * commands.
  */
 typedef enum {
-	CMD_REGISTER,		// server
-	CMD_QUIT,			// server
-	CMD_CONNECT,		// player
-	CMD_DISCONNECT,		// player
+	CMD_NULL,
+	CMD_HELLO,
+	CMD_QUIT,
+	CMD_CONNECT,       // player
+	CMD_DISCONNECT,    // player
 	CMD_PLAYERLIST,
 	CMD_PLAYERUPDATE,
 	CMD_PRINT,
-	CMD_TELEPORT,
-	CMD_INVITE,
-	CMD_SEEN,
-	CMD_WHOIS,
+	CMD_COMMAND,       // teleport, invite, etc
 	CMD_PLAYERS,
-	CMD_FRAG,
-	CMD_MAP,
-	CMD_AUTHORIZE,
-	CMD_HEARTBEAT
-} server_cmd_t;
+	CMD_FRAG,          // someone fragged someone else
+	CMD_MAP,           // map changed
+	CMD_PING           //
+} ra_client_cmd_t;
+
+/**
+ * Server to client commands
+ */
+typedef enum {
+	SCMD_NULL,
+	SCMD_HELLOACK,
+	SCMD_PONG,
+	SCMD_COMMAND,
+	SCMD_SAYCLIENT,
+} ra_server_cmd_t;
+
+typedef enum {
+	CMD_COMMAND_TELEPORT,
+	CMD_COMMAND_INVITE,
+	CMD_COMMAND_WHOIS
+} remote_cmd_command_t;
+
+typedef enum {
+	PRINT_LOW,      // pickups
+	PRINT_MEDIUM,   // obits
+	PRINT_HIGH,     // critical
+	PRINT_CHAT,     // chat (duh)
+} print_level_t;
 
 q2a_config_t config;
 
@@ -185,41 +227,57 @@ q2_server_t *server_list;
 GQueue *queue;
 bool threadrunning;
 MYSQL *db;
-int sockfd;
-
+int sockfd, newsockfd;
+pthread_t threads[MAX_THREADS];
+uint32_t thread_count;
 
 extern bool threadrunning;
 
-void MSG_ReadData(void *out, size_t len);
-uint8_t MSG_ReadByte(void);
-int8_t MSG_ReadChar(void);
-uint16_t MSG_ReadShort(void);
-int16_t MSG_ReadWord(void);
-int32_t MSG_ReadLong(void);
-char *MSG_ReadString(void);
+void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
+uint8_t   MSG_ReadByte(msg_buffer_t *msg);
+int8_t    MSG_ReadChar(msg_buffer_t *msg);
+uint16_t  MSG_ReadShort(msg_buffer_t *msg);
+int16_t   MSG_ReadWord(msg_buffer_t *msg);
+int32_t   MSG_ReadLong(msg_buffer_t *msg);
+char      *MSG_ReadString(msg_buffer_t *msg);
 
-void MSG_WriteByte(uint8_t b, msg_buffer_t *buf);
-void MSG_WriteShort(uint16_t s, msg_buffer_t *buf);
-void MSG_WriteLong(uint32_t l, msg_buffer_t *buf);
-void MSG_WriteString(const char *str, msg_buffer_t *buf);
-void MSG_WriteData(const void *data, size_t length, msg_buffer_t *buf);
+void      MSG_WriteByte(uint8_t b, msg_buffer_t *buf);
+void      MSG_WriteShort(uint16_t s, msg_buffer_t *buf);
+void      MSG_WriteLong(uint32_t l, msg_buffer_t *buf);
+void      MSG_WriteString(const char *str, msg_buffer_t *buf);
+void      MSG_WriteData(const void *data, size_t length, msg_buffer_t *buf);
 
-void SendRCON(q2_server_t *srv, const char *fmt, ...);
+void      SendBuffer(q2_server_t *srv);
 
-void CMD_Teleport_f(q2_server_t *srv);
-void CMD_Register_f(q2_server_t *srv);
-void CMD_Frag_f(q2_server_t *srv);
-void CMD_PlayerConnect_f(q2_server_t *srv);
-void CMD_PlayerDisconnect_f(q2_server_t *srv);
+void      CMD_Teleport_f(q2_server_t *srv);
+void      CMD_Register_f(q2_server_t *srv);
+void      CMD_Frag_f(q2_server_t *srv);
+void      CMD_PlayerConnect_f(q2_server_t *srv);
+void      CMD_PlayerDisconnect_f(q2_server_t *srv);
+
+void      CloseConnection(q2_server_t *srv);
 
 q2_server_t *find_server(uint32_t key);
 q2_server_t *find_server_by_name(const char *name);
 
-void LOG_Frag_f(q2_server_t *srv);
-void LOG_Chat_f(q2_server_t *srv);
+void      *ServerThread(void *arg);
 
-char *va(const char *format, ...);
+void      LOG_Frag_f(q2_server_t *srv);
+void      LOG_Chat_f(q2_server_t *srv);
 
-void TP_GetServers(q2_server_t *srv, uint8_t player, char *target);
+char      *va(const char *format, ...);
+char      *Info_ValueForKey(char *s, char *key);
+
+void      TP_GetServers(q2_server_t *srv, uint8_t player, char *target);
+
+void      ParsePrint(q2_server_t *srv, msg_buffer_t *in);
+void      ParseCommand(q2_server_t *srv, msg_buffer_t *in);
+void      ParseTeleport(q2_server_t *srv, msg_buffer_t *in);
+void      ParseInvite(q2_server_t *srv, msg_buffer_t *in);
+void      ParseWhois(q2_server_t *srv, msg_buffer_t *in);
+void      ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in);
+void      ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in);
+void      ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in);
+void      ParseMap(q2_server_t *srv, msg_buffer_t *in);
 
 #endif

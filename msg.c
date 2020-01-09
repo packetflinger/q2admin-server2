@@ -3,49 +3,49 @@
 
 char buffer[0xffff];
 
-void MSG_ReadData(void *out, size_t len)
+void MSG_ReadData(msg_buffer_t *msg, void *out, size_t len)
 {
-	memcpy(out, &(msg.data[msg.index]), len);
-	msg.index += len;
+	memcpy(out, &(msg->data[msg->index]), len);
+	msg->index += len;
 }
 
 // unsigned
-uint8_t MSG_ReadByte(void)
+uint8_t MSG_ReadByte(msg_buffer_t *msg)
 {
-	unsigned char b = msg.data[msg.index];
-	msg.index++;
+	unsigned char b = msg->data[msg->index];
+	msg->index++;
 	return b & 0xff;
 }
 
 // signed
-int8_t MSG_ReadChar(void)
+int8_t MSG_ReadChar(msg_buffer_t *msg)
 {
-    signed char c = msg.data[msg.index];
-    msg.index++;
+    signed char c = msg->data[msg->index];
+    msg->index++;
     return c;
 }
 
-uint16_t MSG_ReadShort(void)
+uint16_t MSG_ReadShort(msg_buffer_t *msg)
 {
-	return 	(msg.data[msg.index++] +
-			(msg.data[msg.index++] << 8)) & 0xffff;
+	return 	(msg->data[msg->index++] +
+			(msg->data[msg->index++] << 8)) & 0xffff;
 }
 
-int16_t MSG_ReadWord(void)
+int16_t MSG_ReadWord(msg_buffer_t *msg)
 {
-	return 	(msg.data[msg.index++] +
-			(msg.data[msg.index++] << 8));
+	return 	(msg->data[msg->index++] +
+			(msg->data[msg->index++] << 8));
 }
 
-int32_t MSG_ReadLong(void)
+int32_t MSG_ReadLong(msg_buffer_t *msg)
 {
-	return 	msg.data[msg.index++] +
-			(msg.data[msg.index++] << 8) +
-			(msg.data[msg.index++] << 16) +
-			(msg.data[msg.index++] << 24);
+	return 	msg->data[msg->index++] +
+			(msg->data[msg->index++] << 8) +
+			(msg->data[msg->index++] << 16) +
+			(msg->data[msg->index++] << 24);
 }
 
-char *MSG_ReadString(void)
+char *MSG_ReadString(msg_buffer_t *msg)
 {
 	static char str[MAX_STRING_CHARS];
 	static char character;
@@ -53,12 +53,12 @@ char *MSG_ReadString(void)
 
 	do {
 		len++;
-	} while (msg.data[(msg.index + len)] != 0);
+	} while (msg->data[(msg->index + len)] != 0);
 
 	memset(&str, 0, MAX_STRING_CHARS);
 
 	for (i=0; i<=len; i++) {
-		character = MSG_ReadByte() & 0x7f;
+		character = MSG_ReadByte(msg) & 0x7f;
 		strcat(str,  &character);
 	}
 
