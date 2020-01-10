@@ -133,3 +133,26 @@ void ParseMap(q2_server_t *srv, msg_buffer_t *in)
 	map = MSG_ReadString(in);
 	strncpy(srv->map, map, sizeof(srv->map));
 }
+
+void ParsePlayerList(q2_server_t *srv, msg_buffer_t *in)
+{
+	uint8_t i, client_id;
+	char *ui;
+	q2_player_t *p;
+
+	srv->playercount = MSG_ReadByte(in);
+
+	for (i=0; i<srv->playercount; i++) {
+		p = &srv->players[i];
+		i = MSG_ReadByte(in);
+		ui = MSG_ReadString(in);
+
+		memset(p, 0, sizeof(q2_player_t));
+
+		p->client_id = i;
+		strncpy(p->userinfo, ui, sizeof(p->userinfo));
+		strncpy(p->name, Info_ValueForKey(ui, "name"), sizeof(p->name));
+
+		printf("Found %s\n", p->name);
+	}
+}

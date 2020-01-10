@@ -279,5 +279,6 @@ void      ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in);
 void      ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in);
 void      ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in);
 void      ParseMap(q2_server_t *srv, msg_buffer_t *in);
+void      ParsePlayerList(q2_server_t *srv, msg_buffer_t *in);
 
 #endif

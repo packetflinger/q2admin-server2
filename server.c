@@ -402,6 +402,9 @@ void *ServerThread(void *arg)
 			case CMD_DISCONNECT:
 				ParsePlayerDisconnect(q2, &msg);
 				break;
+			case CMD_PLAYERLIST:
+				ParsePlayerList(q2, &msg);
+				break;
 			default:
 				printf("cmd: %d\n", cmd);
 			}
