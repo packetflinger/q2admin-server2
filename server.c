@@ -405,6 +405,9 @@ void *ServerThread(void *arg)
 			case CMD_PLAYERLIST:
 				ParsePlayerList(q2, &msg);
 				break;
+			case CMD_MAP:
+				ParseMap(q2, &msg);
+				break;
 			default:
 				printf("cmd: %d\n", cmd);
 			}
