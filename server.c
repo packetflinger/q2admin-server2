@@ -353,7 +353,14 @@ void *ServerThread(void *arg)
 
 	// not a valid server
 	if (!q2) {
+		q2_server_t invalid_server;
 		printf("Invalid serverkey, closing connection\n");
+		invalid_server.socket = _q2con.socket;
+		MSG_WriteByte(-1, &invalid_server.msg);
+		MSG_WriteByte(ERR_UNAUTHORIZED, &invalid_server.msg);
+		MSG_WriteString("Server key invalid", &invalid_server.msg);
+		SendBuffer(&invalid_server);
+
 		close(_q2con.socket);
 		return NULL;
 	}

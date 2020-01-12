@@ -203,23 +203,45 @@ typedef enum {
 typedef enum {
 	SCMD_NULL,
 	SCMD_HELLOACK,
+	SCMD_ERROR,
 	SCMD_PONG,
 	SCMD_COMMAND,
 	SCMD_SAYCLIENT,
 } ra_server_cmd_t;
 
+
+/**
+ * Q2admin specific commands
+ */
 typedef enum {
 	CMD_COMMAND_TELEPORT,
 	CMD_COMMAND_INVITE,
 	CMD_COMMAND_WHOIS
 } remote_cmd_command_t;
 
+/**
+ * Print levels
+ */
 typedef enum {
 	PRINT_LOW,      // pickups
 	PRINT_MEDIUM,   // obits
 	PRINT_HIGH,     // critical
 	PRINT_CHAT,     // chat (duh)
 } print_level_t;
+
+
+/**
+ * Possible errors to send to the q2 servers
+ * 1xx errors are soft, can be recovered from
+ * 2xx errors are hard, causes a disconnect
+ */
+typedef enum {
+	ERR_INVITEQUOTA = 100,
+	ERR_TELEPORTQUOTA,
+	ERR_UNAUTHORIZED = 200,	// server key mismatch
+	ERR_ENCRYPTION,
+} ra_error_t;
+
 
 q2a_config_t config;
 
