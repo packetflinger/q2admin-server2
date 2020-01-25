@@ -12,9 +12,9 @@ RM ?= rm -f
 STRIP ?= strip
 WINDRES ?= windres
 
-CFLAGS ?= --std=c99 -D_POSIX_C_SOURCE=200112L
+CFLAGS ?= -g --std=c99 -D_POSIX_C_SOURCE=200112L
 
-HEADERS := server.h
+HEADERS := server.h list.h
 
 OBJS :=	cmd.o \
 		log.o \

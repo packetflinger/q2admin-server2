@@ -31,6 +31,15 @@
 
 #include <errno.h>
 
+#include "list.h"
+
+#if __GNUC__ >= 4
+#define q_offsetof(t, m)    __builtin_offsetof(t, m)
+#else
+#define q_offsetof(t, m)    ((size_t)&((t *)0)->m)
+#endif
+
+#define random()                       ((rand () & 0x7fff) / ((float)0x7fff))
 #define ROUNDF(f,c) (((float)((int)((f) * (c))) / (c)))
 
 #define PORT		9988
@@ -56,6 +65,10 @@ typedef unsigned char byte;
 #define RFL_FIND       1 << 4	// 16
 #define RFL_WHOIS      1 << 5	// 32
 #define RFL_DEBUG      1 << 11	// 2047
+
+#define FOR_EACH_SERVER(s) \
+    LIST_FOR_EACH(q2_server_t, s, &q2srvlist, entry)
+
 
 /**
  * Each server message
@@ -139,11 +152,10 @@ struct q2_server_s {
 	struct addrinfo *addr;         //
 	size_t addrlen;                // remove later
 	msg_buffer_t msg;              // remove later
-	struct q2_server_s *head;      // first server in the list
-	struct q2_server_s *next;      // next server entry
 	MYSQL *db;                     // this server's database connection
 	char encryption_key[1400];     // key for decrypting msgs
 	q2_player_t players[256];
+	list_t entry;
 };
 
 typedef struct q2_server_s q2_server_t;
@@ -207,6 +219,7 @@ typedef enum {
 	SCMD_PONG,
 	SCMD_COMMAND,
 	SCMD_SAYCLIENT,
+	SCMD_SAYALL
 } ra_server_cmd_t;
 
 
@@ -245,7 +258,6 @@ typedef enum {
 
 q2a_config_t config;
 
-q2_server_t *server_list;
 GQueue *queue;
 bool threadrunning;
 MYSQL *db;
@@ -254,6 +266,9 @@ pthread_t threads[MAX_THREADS];
 uint32_t thread_count;
 
 extern bool threadrunning;
+extern list_t q2srvlist;
+
+
 
 void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
 uint8_t   MSG_ReadByte(msg_buffer_t *msg);

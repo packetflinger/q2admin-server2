@@ -1,6 +1,9 @@
 
 #include "server.h"
 
+LIST_DECL(q2srvlist);
+
+
 
 /**
  * Loads config from file. Uses glib2's ini parsing stuff
@@ -90,12 +93,10 @@ char *va(const char *format, ...) {
  */
 void FreeServers(q2_server_t *listhead)
 {
-	q2_server_t *tmp;
+	q2_server_t *s;
 
-	while (listhead != NULL) {
-		tmp = listhead;
-		listhead = (q2_server_t *) listhead->next;
-		free(tmp);
+	FOR_EACH_SERVER(s) {
+		// free
 	}
 }
 
@@ -107,10 +108,12 @@ bool LoadServers()
 {
 	static MYSQL_RES *res;
 	static MYSQL_ROW r;
-	q2_server_t *temp;
+	q2_server_t *temp, *server;
 	uint32_t err;
 	struct addrinfo hints;
 	char strport[7];
+
+	List_Init(&q2srvlist);
 
 	printf("  * Loading servers from database *\n");
 
@@ -155,17 +158,11 @@ bool LoadServers()
 			continue;
 		}
 
-		printf("   - %s (%s) %s\n", temp->name, temp->teleportname, temp->ip);
+		List_Append(&q2srvlist, &temp->entry);
+	}
 
-		// head
-		if (server_list == NULL) {
-			server_list = temp;
-			server_list->head = temp;
-		} else {
-			temp->head = server_list->head;
-			server_list->next = temp;
-			server_list = server_list->next;
-		}
+	FOR_EACH_SERVER(server) {
+		printf("    - %s (%s) %s:%d\n", server->name, server->teleportname, server->ip, server->port);
 	}
 
 	return true;
@@ -176,14 +173,12 @@ bool LoadServers()
  */
 q2_server_t *find_server(uint32_t key)
 {
-	q2_server_t *tmp;
-	tmp = server_list->head;
+	q2_server_t *s;
 
-	while (tmp) {
-		if (tmp->key == key) {
-			return tmp;
+	FOR_EACH_SERVER(s) {
+		if (s->key == key) {
+			return s;
 		}
-		tmp = tmp->next;
 	}
 
 	return NULL;
@@ -194,14 +189,12 @@ q2_server_t *find_server(uint32_t key)
  */
 q2_server_t *find_server_by_name(const char *name)
 {
-	q2_server_t *tmp;
-	tmp = server_list->head;
+	q2_server_t *s;
 
-	while (tmp) {
-		if (!strcmp(name, tmp->teleportname)) {
-			return tmp;
+	FOR_EACH_SERVER(s) {
+		if (strcmp(name, s->teleportname) == 0) {
+			return s;
 		}
-		tmp = tmp->next;
 	}
 
 	return NULL;
@@ -304,14 +297,6 @@ void *ServerThread(void *arg)
 	byte cmd;
 	ssize_t bytessent;
 
-	/*
-	struct timeval _tv;
-
-	_tv.tv_sec = 10;
-	_tv.tv_usec = 0;
-	setsockopt(_q2con.socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&_tv, sizeof(_tv));
-	*/
-
 	memset(&msg, 0, sizeof(msg_buffer_t));
 
 	// figure out which server connection this should go to
@@ -334,10 +319,8 @@ void *ServerThread(void *arg)
 
 	printf("thread[%d] - server: %d\n", _q2con.thread_id, serverkey);
 
-	// find the server entry that matches supplied serverkey
-	for (server_list = server_list->head; server_list; server_list = server_list->next) {
-		if (serverkey == server_list->key) {
-			q2 = server_list;
+	FOR_EACH_SERVER(q2) {
+		if (serverkey == q2->key) {
 			q2->socket = _q2con.socket;
 			q2->connected = true;
 			q2->port = port;
@@ -479,8 +462,6 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	server_list = 0;
-
 	LoadServers();
 
 	// Creating socket file descriptor
@@ -493,7 +474,7 @@ int main(int argc, char **argv)
 	memset(&cliaddr, 0, sizeof(cliaddr));
 	
 	// Filling server information 
-	servaddr.sin_family = AF_INET; // IPv4
+	servaddr.sin_family = AF_UNSPEC; // IPv4 + IPv6
 	servaddr.sin_addr.s_addr = INADDR_ANY;
 	servaddr.sin_port = htons(config.port);
 	

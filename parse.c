@@ -64,9 +64,49 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 	SendBuffer(srv);
 }
 
+/**
+ * A client issued an invite command
+ */
 void ParseInvite(q2_server_t *srv, msg_buffer_t *in)
 {
+	q2_server_t *s;
+	uint8_t client_id;
+	char *text;
+	char message[MAX_STRING_CHARS];
 
+	client_id = MSG_ReadByte(in);
+	text = MSG_ReadString(in);
+
+	// handle flood detection here
+
+	if (text[0]) {
+		strncpy(message,
+			va("%s invites you to play on %s: %s",
+					srv->players[client_id].name,
+					srv->teleportname,
+					text
+			),
+			sizeof(message)
+		);
+	} else {
+		strncpy(message,
+			va("You are cordially invited to join %s playing on %s",
+					srv->players[client_id].name,
+					srv->teleportname
+			),
+			sizeof(message)
+		);
+	}
+
+	FOR_EACH_SERVER(s) {
+		if (!s->connected) {
+			continue;
+		}
+
+		MSG_WriteByte(SCMD_SAYALL, &s->msg);
+		MSG_WriteString(message, &s->msg);
+		SendBuffer(s);
+	}
 }
 
 void ParseWhois(q2_server_t *srv, msg_buffer_t *in)
