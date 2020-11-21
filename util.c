@@ -14,3 +14,16 @@ float P_KillDeathRatio(q2_player_t *p)
 
 	return ROUNDF(p->kill_count / deaths, 100);
 }
+
+void printdata(byte *data, int size)
+{
+	int i;
+
+	for (i = 0; i < size; i++){
+	    if (i > 0)
+	    	printf(":");
+
+	    printf("%02X", data[i]);
+	}
+	printf("\n");
+}

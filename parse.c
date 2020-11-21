@@ -2,6 +2,18 @@
 
 
 /**
+ * Parse the first message sent from the client
+ */
+void ParseHello(hello_t *h, msg_buffer_t *in)
+{
+	h->key = MSG_ReadLong(in);
+	h->version = MSG_ReadLong(in);
+	h->port = MSG_ReadShort(in);
+	h->max_clients= MSG_ReadByte(in);
+	MSG_ReadData(in, h->challenge, CHALLENGE_LEN);
+}
+
+/**
  * Parse in incoming PRINT message.
  * 1 byte for the print level, and
  * a null-terminated string

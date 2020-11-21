@@ -12,11 +12,13 @@ RM ?= rm -f
 STRIP ?= strip
 WINDRES ?= windres
 
-CFLAGS ?= -g --std=c99 -D_POSIX_C_SOURCE=200112L
+CFLAGS ?= -g --std=c99 -D_POSIX_C_SOURCE=200112L -I/usr/local/jannson/include
 
 HEADERS := server.h list.h
 
-OBJS :=	cmd.o \
+OBJS :=	client.o \
+		cmd.o \
+		crypto.o \
 		log.o \
 		msg.o \
 		parse.o \
@@ -25,7 +27,7 @@ OBJS :=	cmd.o \
 		util.o
 
 CFLAGS += $(MY_CFLAGS) $(GLIB_CFLAGS)
-LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS)
+LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -L/usr/local/jansson -ljansson
 TARGET ?= q2admin-server
 	
 all: $(TARGET)

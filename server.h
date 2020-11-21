@@ -23,6 +23,13 @@
 #include <netdb.h>
 #endif
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/rand.h>
+#include <openssl/pem.h>
+
 #include <mysql/mysql.h>
 #include <glib.h>
 
@@ -30,6 +37,7 @@
 #include <pthread.h>
 
 #include <errno.h>
+#include <signal.h>
 
 #include "list.h"
 
@@ -46,6 +54,9 @@
 #define MAXLINE 	1390
 #define CONFIGFILE	"q2a.ini"
 #define VER_REQ     0
+
+#define RSA_BITS        2048  // encryption key length
+#define CHALLENGE_LEN   8     // bytes
 
 #define MAX_STRING_CHARS	1024
 #define MAX_TELE_NAME       15
@@ -95,10 +106,15 @@ msg_buffer_t msg;
  */
 typedef struct {
 	uint16_t port;
+	uint16_t client_port;
+	uint16_t tls_port;
 	char db_host[50];
 	char db_user[20];
 	char db_pass[20];
 	char db_schema[20];
+	char certificate[50];
+	char private_key[50];
+	char public_key[50];
 } q2a_config_t;
 
 
@@ -112,7 +128,18 @@ typedef struct {
 	uint32_t kill_count;
 	uint32_t death_count;
 	uint32_t suicide_count;
+	uint32_t invite_count;      // how many times this player used invite
+	uint32_t invite_frame;      // throttle invite cmd to this frame
 } q2_player_t;
+
+/**
+ *
+ */
+//typedef struct {
+//	SSL        *connection;
+//	SSL_CTX    *context;
+//	SSL_METHOD *method;
+//} ssl_connection_t;
 
 
 /**
@@ -120,10 +147,27 @@ typedef struct {
  * before we know which server it belongs with
  */
 typedef struct {
-	uint32_t thread_id;
-	uint32_t socket;
+	uint32_t           thread_id;
+	uint32_t           socket;
+	SSL                *ssl;
+	SSL_CTX            *ssl_context;
+	const SSL_METHOD   *ssl_method;
+	struct sockaddr_in addr;
+	uint32_t           addr_len;
+	list_t             entry;
 } connection_t;
 
+/**
+ * Hello is the first message sent by a client. It contains all
+ * the necessary info to register with the server.
+ */
+typedef struct {
+	uint32_t           key;                      // the unique database index
+	uint32_t           version;                  // the q2admin game version
+	uint16_t           port;                     // the port q2 is running on the client
+	uint8_t            max_clients;              // max players on that server
+	byte               challenge[CHALLENGE_LEN]; // random data to auth the server
+} hello_t;
 
 /**
  * Represents a server record in the database. For speed sake, these records are
@@ -132,6 +176,8 @@ typedef struct {
 struct q2_server_s {
 	bool connected;
 	uint32_t socket;
+	//ssl_connection_t ssl;
+	connection_t connection;
 	uint32_t id;                   // primary key in database table
 	uint32_t key;                  // auth key, sent with every msg
 	uint32_t version;              // which revision are we running?
@@ -153,8 +199,12 @@ struct q2_server_s {
 	size_t addrlen;                // remove later
 	msg_buffer_t msg;              // remove later
 	MYSQL *db;                     // this server's database connection
-	char encryption_key[1400];     // key for decrypting msgs
+	//char encryption_key[1400];     // key for decrypting msgs
 	q2_player_t players[256];
+	BIO *bio;                      // TLS buffered IO pointer
+	bool trusted;                  // auth'd, identity confirmed
+	char public_key[600];
+	bool tls;                      // is this server connection encrypted?
 	list_t entry;
 };
 
@@ -219,7 +269,8 @@ typedef enum {
 	SCMD_PONG,
 	SCMD_COMMAND,
 	SCMD_SAYCLIENT,
-	SCMD_SAYALL
+	SCMD_SAYALL,
+	SCMD_AUTH,
 } ra_server_cmd_t;
 
 
@@ -261,14 +312,13 @@ q2a_config_t config;
 GQueue *queue;
 bool threadrunning;
 MYSQL *db;
-int sockfd, newsockfd;
+int sockfd, newsockfd, clsock, mgmtsock;
 pthread_t threads[MAX_THREADS];
 uint32_t thread_count;
 
 extern bool threadrunning;
 extern list_t q2srvlist;
-
-
+extern list_t connlist;
 
 void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
 uint8_t   MSG_ReadByte(msg_buffer_t *msg);
@@ -317,5 +367,16 @@ void      ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in);
 void      ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in);
 void      ParseMap(q2_server_t *srv, msg_buffer_t *in);
 void      ParsePlayerList(q2_server_t *srv, msg_buffer_t *in);
+void      ParseHello(hello_t *h, msg_buffer_t *in);
+
+void      *ClientThread(void *arg);
+void      CL_HandleInput(gchar **in);
+
+// crypto.c
+//uint32_t  Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from);
+void      Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from, int *len);
+uint32_t  Client_PublicKey_Decypher(q2_server_t *q2, byte *to, byte *from);
+uint32_t  Server_PrivateKey_Encypher(byte *to, byte *from);
+uint32_t  Server_PrivateKey_Decypher(byte *to, byte *from);
 
 #endif

@@ -49,9 +49,11 @@
                             							
                             <tool id="cdt.managedbuild.tool.gnu.c.compiler.base.844283420" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
                                 								
-                                <option id="gnu.c.compiler.option.include.paths.1651332590" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+                                <option id="gnu.c.compiler.option.include.paths.1651332590" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
                                     									
                                     <listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
+                                    									
+                                    <listOptionValue builtIn="false" value="/usr/local/jannson/include"/>
                                     								
                                 </option>
                                 								
@@ -62,6 +64,18 @@
                             <tool id="cdt.managedbuild.tool.gnu.c.linker.base.47245783" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.base"/>
                             							
                             <tool id="cdt.managedbuild.tool.gnu.cpp.linker.base.865621602" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.base">
+                                								
+                                <option id="gnu.cpp.link.option.paths.2113842996" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
+                                    									
+                                    <listOptionValue builtIn="false" value="/usr/local/jannson"/>
+                                    								
+                                </option>
+                                								
+                                <option id="gnu.cpp.link.option.libs.1575841727" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
+                                    									
+                                    <listOptionValue builtIn="false" srcPrefixMapping="" srcRootPath="" value="/usr/local/jannson/lib/libjansson.so"/>
+                                    								
+                                </option>
                                 								
                                 <inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.781804528" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
                                     									
@@ -90,6 +104,8 @@
                             <option id="gnu.c.compiler.option.include.paths.1821926608" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
                                 								
                                 <listOptionValue builtIn="false" value="/usr/include/glib-2.0"/>
+                                								
+                                <listOptionValue builtIn="false" value="/usr/local/jannson/include"/>
                                 							
                             </option>
                             							
@@ -134,5 +150,17 @@
         </scannerConfigBuildInfo>
         	
     </storageModule>
+    	
+    <storageModule moduleId="refreshScope" versionNumber="2">
+        		
+        <configuration configurationName="Default">
+            			
+            <resource resourceType="PROJECT" workspacePath="/q2admin-server2"/>
+            		
+        </configuration>
+        	
+    </storageModule>
+    	
+    <storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
     
 </cproject>
