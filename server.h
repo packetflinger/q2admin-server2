@@ -56,7 +56,7 @@
 #define VER_REQ     0
 
 #define RSA_BITS        2048  // encryption key length
-#define CHALLENGE_LEN   8     // bytes
+#define CHALLENGE_LEN   16     // bytes
 
 #define MAX_STRING_CHARS	1024
 #define MAX_TELE_NAME       15
@@ -378,5 +378,7 @@ void      Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from, int *
 uint32_t  Client_PublicKey_Decypher(q2_server_t *q2, byte *to, byte *from);
 uint32_t  Server_PrivateKey_Encypher(byte *to, byte *from);
 uint32_t  Server_PrivateKey_Decypher(byte *to, byte *from);
+
+size_t    Sign_Client_Challenge(byte *to, byte *from);
 
 #endif

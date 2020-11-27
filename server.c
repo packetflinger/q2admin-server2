@@ -152,19 +152,19 @@ bool LoadServers()
 		memset(temp, 0x0, sizeof(q2_server_t));
 
 		temp->id = atoi(r[0]);
-		temp->key = atoi(r[2]);
-		temp->port = atoi(r[4]);
+		temp->key = atoi(r[3]);
+		temp->port = atoi(r[5]);
 		strncpy(temp->password, r[5], sizeof(temp->password));
-		temp->maxclients = atoi(r[6]);
-		temp->enabled = atoi(r[7]);
-		temp->authorized = atoi(r[8]);
-		temp->flags = atoi(r[10]);
-		strncpy(temp->name, r[11], sizeof(temp->name));
-		strncpy(temp->teleportname, r[12], sizeof(temp->teleportname));
-		temp->lastcontact = atoi(r[15]);
-		strncpy(temp->map, r[16], sizeof(temp->map));
-		strncpy(temp->public_key, r[18], sizeof(temp->public_key));
-		strncpy(temp->ip, r[19], sizeof(temp->ip));
+		temp->maxclients = atoi(r[7]);
+		temp->enabled = atoi(r[8]);
+		temp->authorized = atoi(r[9]);
+		temp->flags = atoi(r[11]);
+		strncpy(temp->name, r[12], sizeof(temp->name));
+		strncpy(temp->teleportname, r[13], sizeof(temp->teleportname));
+		temp->lastcontact = atoi(r[16]);
+		strncpy(temp->map, r[17], sizeof(temp->map));
+		strncpy(temp->public_key, r[19], sizeof(temp->public_key));
+		strncpy(temp->ip, r[20], sizeof(temp->ip));
 
 		memset(&hints, 0, sizeof(hints));
 		sprintf(strport, "%d", temp->port);
@@ -181,6 +181,7 @@ bool LoadServers()
 		}
 
 		List_Append(&q2srvlist, &temp->entry);
+
 	}
 
 	FOR_EACH_SERVER(server) {
@@ -347,11 +348,12 @@ void *ServerThread(void *arg)
 	size_t ciphersz;
 	byte cipher[200];
 	unsigned char cl_challenge[256];
-	byte challenge_cypher[256];
-	int challenge_cypherlen;
+	byte challenge_cipher[256];
+	int challenge_cipherlen;
 	hello_t hello;
+	uint8_t tmp;
 
-	printf(" New unencrypted client\n");
+
 	threadid = pthread_self();
 
 	sock = *(uint32_t *) arg;
@@ -362,8 +364,20 @@ void *ServerThread(void *arg)
 
 	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
 
+	printf("ret = %d\n", _ret);
+
+	// socket closed on other end
+	if (_ret == 0) {
+		return NULL;
+	}
+
+	printf(" New client\n");
+
+	tmp = MSG_ReadByte(&msg);
+	printf("%d\n", tmp);
 	// first thing should be hello
-	if (MSG_ReadByte(&msg) != CMD_HELLO) {
+	//if (MSG_ReadByte(&msg) != CMD_HELLO) {
+	if (tmp != CMD_HELLO) {
 		printf("thread[%d] - protocol error, not a real client\n", threadid);
 		return NULL;
 	}
@@ -379,15 +393,16 @@ void *ServerThread(void *arg)
 			q2->maxclients = maxclients;
 
 			// encrypt client's challenge to send back and auth server
-			Client_PublicKey_Encypher(q2, &challenge_cypher[0], &hello.challenge[0], &challenge_cypherlen);
+			//Client_PublicKey_Encypher(q2, &challenge_cypher[0], &hello.challenge[0], &challenge_cypherlen);
+			challenge_cipherlen = Sign_Client_Challenge(&challenge_cipher[0], &hello.challenge[0]);
 
 			// generate random data to auth the client
 			RAND_bytes(&sv_challenge[0], CHALLENGE_LEN);
 
 			// q2 server won't send any more data until it receives this ACK
 			MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
-			MSG_WriteShort(challenge_cypherlen, &q2->msg);
-			MSG_WriteData(&challenge_cypher[0], challenge_cypherlen, &q2->msg);
+			MSG_WriteShort(challenge_cipherlen, &q2->msg);
+			MSG_WriteData(&challenge_cipher[0], challenge_cipherlen, &q2->msg);
 			MSG_WriteData(&sv_challenge[0], CHALLENGE_LEN, &q2->msg);
 			SendBuffer(q2);
 
@@ -761,8 +776,8 @@ void *Listener(void *arg)
 	memset(&servaddr, 0, sizeof(servaddr));
 	memset(&cliaddr, 0, sizeof(cliaddr));
 
-	OpenSSL_add_all_algorithms();
-	SSL_load_error_strings();
+	//OpenSSL_add_all_algorithms();
+	//SSL_load_error_strings();
 
 	servaddr.sin_family = AF_UNSPEC; // IPv4 + IPv6
 	servaddr.sin_addr.s_addr = INADDR_ANY;
@@ -890,11 +905,13 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	printf("Connected to database\n");
+
 	LoadServers();
 
 	(void)signal(SIGINT, SignalCatcher);
 
-	pthread_create(&threads[0], NULL, TLS_Listener, NULL);
+	//pthread_create(&threads[0], NULL, TLS_Listener, NULL);
 	Listener(NULL);
 
 	return EXIT_SUCCESS;
