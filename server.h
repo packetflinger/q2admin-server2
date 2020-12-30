@@ -384,7 +384,7 @@ void      CL_HandleInput(gchar **in);
 // crypto.c
 //uint32_t  Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from);
 void      Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from, int *len);
-uint32_t  Client_PublicKey_Decypher(q2_server_t *q2, byte *to, byte *from);
+size_t    Client_Challenge_Decrypt(q2_server_t *q2, byte *to, byte *from);
 uint32_t  Server_PrivateKey_Encypher(byte *to, byte *from);
 uint32_t  Server_PrivateKey_Decypher(byte *to, byte *from);
 

@@ -343,7 +343,7 @@ void *ServerThread(void *arg)
 	byte challenge[CHALLENGE_LEN];
 	byte sv_challenge[CHALLENGE_LEN];
 	size_t ciphersz;
-	byte cipher[200];
+	byte cipher[RSA_LEN];
 	unsigned char cl_challenge[256];
 	byte challenge_cipher[256];
 	int challenge_cipherlen;
@@ -442,14 +442,27 @@ void *ServerThread(void *arg)
 	printf("%s [%d] connected\n", q2->teleportname, hello.version);
 
 	// read the encrypted challenge response
+	memset(&msg, 0, sizeof(msg_buffer_t));
 	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
 
 	ciphersz = MSG_ReadShort(&msg);
 	MSG_ReadData(&msg, &cipher, ciphersz);
 
-	_ret = Client_PublicKey_Decypher(q2, cl_challenge_plaintext, cipher);
-	hexDump("sv_challenge", sv_challenge, CHALLENGE_LEN);
-	hexDump("Response", cl_challenge_plaintext, _ret);
+	_ret = RSA_public_decrypt(
+	        ciphersz,
+	        cipher,
+	        cl_challenge_plaintext,
+	        q2->publickey,
+	        RSA_PKCS1_PADDING
+	);
+
+	if (memcmp(sv_challenge, cl_challenge_plaintext, CHALLENGE_LEN) == 0) {
+	    printf("%s is trusted\n", q2->teleportname);
+	} else {
+	    printf("%s is NOT trusted, disconnecting\n", q2->teleportname);
+	    CloseConnection(q2);
+	    return NULL;
+	}
 
 	// main server connection loop
 	while (true) {
@@ -782,6 +795,10 @@ void SendBuffer(q2_server_t *srv)
 
 void CloseConnection(q2_server_t *srv)
 {
+    if (srv->publickey) {
+        RSA_free(srv->publickey);
+    }
+
 	close(srv->socket);
 	srv->connected = false;
 }
