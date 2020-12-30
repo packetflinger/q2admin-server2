@@ -55,8 +55,11 @@
 #define CONFIGFILE	"q2a.ini"
 #define VER_REQ     0
 
-#define RSA_BITS        2048  // encryption key length
+#define RSA_BITS        2048   // encryption key length
 #define CHALLENGE_LEN   16     // bytes
+#define AESKEY_LEN      16     // bytes
+#define AESBLOCK_LEN    16
+#define RSA_LEN			256    // 2048 bits
 
 #define MAX_STRING_CHARS	1024
 #define MAX_TELE_NAME       15
@@ -154,6 +157,9 @@ typedef struct {
 	const SSL_METHOD   *ssl_method;
 	struct sockaddr_in addr;
 	uint32_t           addr_len;
+	byte               aeskey[AESKEY_LEN];      // plaintext session key
+	byte               aeskey_cipher[RSA_LEN];  // encrypted session key + IV
+	byte                iv[AESBLOCK_LEN];
 	list_t             entry;
 } connection_t;
 
@@ -166,6 +172,7 @@ typedef struct {
 	uint32_t           version;                  // the q2admin game version
 	uint16_t           port;                     // the port q2 is running on the client
 	uint8_t            max_clients;              // max players on that server
+	uint8_t            encrypted;                // is this connection encrypted?
 	byte               challenge[CHALLENGE_LEN]; // random data to auth the server
 } hello_t;
 
@@ -205,6 +212,7 @@ struct q2_server_s {
 	bool trusted;                  // auth'd, identity confirmed
 	char public_key[600];
 	bool tls;                      // is this server connection encrypted?
+	RSA *publickey;
 	list_t entry;
 };
 
@@ -256,7 +264,8 @@ typedef enum {
 	CMD_PLAYERS,
 	CMD_FRAG,          // someone fragged someone else
 	CMD_MAP,           // map changed
-	CMD_PING           //
+	CMD_PING,           //
+	CMD_AUTH
 } ra_client_cmd_t;
 
 /**
@@ -380,5 +389,7 @@ uint32_t  Server_PrivateKey_Encypher(byte *to, byte *from);
 uint32_t  Server_PrivateKey_Decypher(byte *to, byte *from);
 
 size_t    Sign_Client_Challenge(byte *to, byte *from);
+size_t    Encrypt_AESKey(RSA *publickey, byte *key, byte *iv, byte *cipher);
+void        hexDump (char *desc, void *addr, int len);
 
 #endif

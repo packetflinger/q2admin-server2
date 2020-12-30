@@ -339,10 +339,7 @@ void *ServerThread(void *arg)
 	byte cmd;
 	ssize_t bytessent = 0;
 	size_t readsz = 0;
-	//SSL *ssl;
-	//SSL_CTX *ctx;
 	const SSL_METHOD *method;
-	//BIO *io, *ssl_bio;
 	byte challenge[CHALLENGE_LEN];
 	byte sv_challenge[CHALLENGE_LEN];
 	size_t ciphersz;
@@ -352,7 +349,8 @@ void *ServerThread(void *arg)
 	int challenge_cipherlen;
 	hello_t hello;
 	uint8_t tmp;
-
+	FILE *fp;
+	byte cl_challenge_plaintext[CHALLENGE_LEN];
 
 	threadid = pthread_self();
 
@@ -364,20 +362,12 @@ void *ServerThread(void *arg)
 
 	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
 
-	printf("ret = %d\n", _ret);
-
 	// socket closed on other end
 	if (_ret == 0) {
 		return NULL;
 	}
 
-	printf(" New client\n");
-
-	tmp = MSG_ReadByte(&msg);
-	printf("%d\n", tmp);
-	// first thing should be hello
-	//if (MSG_ReadByte(&msg) != CMD_HELLO) {
-	if (tmp != CMD_HELLO) {
+	if (MSG_ReadByte(&msg) != CMD_HELLO) {
 		printf("thread[%d] - protocol error, not a real client\n", threadid);
 		return NULL;
 	}
@@ -392,18 +382,43 @@ void *ServerThread(void *arg)
 			q2->port = port;
 			q2->maxclients = maxclients;
 
-			// encrypt client's challenge to send back and auth server
-			//Client_PublicKey_Encypher(q2, &challenge_cypher[0], &hello.challenge[0], &challenge_cypherlen);
-			challenge_cipherlen = Sign_Client_Challenge(&challenge_cipher[0], &hello.challenge[0]);
+			// load server's public key into memory
+			char keyfilename[200];
+			sprintf(keyfilename, "keys/%d.pem", q2->key);
+			fp = fopen(keyfilename, "rb");
+			q2->publickey = RSA_new();
+			q2->publickey = PEM_read_RSAPublicKey(fp, &q2->publickey, NULL, NULL);
+			fclose(fp);
 
-			// generate random data to auth the client
-			RAND_bytes(&sv_challenge[0], CHALLENGE_LEN);
+			RAND_bytes(sv_challenge, CHALLENGE_LEN);
+
+			// encrypt client's challenge to send back and auth server
+			challenge_cipherlen = Sign_Client_Challenge(challenge_cipher, hello.challenge);
+			if (challenge_cipherlen == 0) {
+			    RSA_free(q2->publickey);
+			    close(sock);
+			    return NULL;
+			}
 
 			// q2 server won't send any more data until it receives this ACK
 			MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
 			MSG_WriteShort(challenge_cipherlen, &q2->msg);
-			MSG_WriteData(&challenge_cipher[0], challenge_cipherlen, &q2->msg);
-			MSG_WriteData(&sv_challenge[0], CHALLENGE_LEN, &q2->msg);
+			MSG_WriteData(challenge_cipher, challenge_cipherlen, &q2->msg);
+
+			// client wants the connection encrypted
+			if (hello.encrypted) {
+				RAND_bytes(q2->connection.aeskey, AESKEY_LEN);  // session key
+				RAND_bytes(q2->connection.iv, AESBLOCK_LEN);    // initialization vector
+				Encrypt_AESKey(
+				        q2->publickey,
+				        q2->connection.aeskey,
+				        q2->connection.iv,
+				        q2->connection.aeskey_cipher
+				);
+				MSG_WriteData(&q2->connection.aeskey_cipher, RSA_LEN, &q2->msg);
+			}
+
+			MSG_WriteData(sv_challenge, CHALLENGE_LEN, &q2->msg);
 			SendBuffer(q2);
 
 			break;
@@ -424,15 +439,17 @@ void *ServerThread(void *arg)
 		return NULL;
 	}
 
-	printf("Client <%d> version %d connected\n", hello.key, hello.version);
+	printf("%s [%d] connected\n", q2->teleportname, hello.version);
 
-	// read the encrypted challenge
+	// read the encrypted challenge response
 	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
 
 	ciphersz = MSG_ReadShort(&msg);
 	MSG_ReadData(&msg, &cipher, ciphersz);
 
-	printf("thread[%d] - server: %d\n", threadid, serverkey);
+	_ret = Client_PublicKey_Decypher(q2, cl_challenge_plaintext, cipher);
+	hexDump("sv_challenge", sv_challenge, CHALLENGE_LEN);
+	hexDump("Response", cl_challenge_plaintext, _ret);
 
 	// main server connection loop
 	while (true) {
@@ -444,6 +461,11 @@ void *ServerThread(void *arg)
 
 		if (msg.length < 0) {
 			perror(va("recv (server %d)",q2->key));
+		}
+
+		if (msg.length == 0) {
+			printf("%s disconnected\n", q2->teleportname);
+			return NULL;
 		}
 
 		if (errno) {
@@ -744,7 +766,7 @@ void SendBuffer(q2_server_t *srv)
 		return;
 	}
 
-	printf("sending (%d): %s\n", srv->msg.length, srv->msg.data);
+	//hexDump("Sending", srv->msg.data, srv->msg.length);
 
 	if (srv->tls) {
 		BIO_write(srv->bio, srv->msg.data, srv->msg.length);

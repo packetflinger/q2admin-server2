@@ -9,7 +9,8 @@ void ParseHello(hello_t *h, msg_buffer_t *in)
 	h->key = MSG_ReadLong(in);
 	h->version = MSG_ReadLong(in);
 	h->port = MSG_ReadShort(in);
-	h->max_clients= MSG_ReadByte(in);
+	h->max_clients = MSG_ReadByte(in);
+	h->encrypted = MSG_ReadByte(in);
 	MSG_ReadData(in, h->challenge, CHALLENGE_LEN);
 }
 
