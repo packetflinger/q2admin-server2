@@ -80,6 +80,8 @@ typedef unsigned char byte;
 #define RFL_WHOIS      1 << 5	// 32
 #define RFL_DEBUG      1 << 11	// 2047
 
+#define RFL(f)      ((remote.flags & RFL_##f) != 0)
+
 #define FOR_EACH_SERVER(s) \
     LIST_FOR_EACH(q2_server_t, s, &q2srvlist, entry)
 
@@ -160,6 +162,9 @@ typedef struct {
 	byte               aeskey[AESKEY_LEN];      // plaintext session key
 	byte               aeskey_cipher[RSA_LEN];  // encrypted session key + IV
 	byte                iv[AESBLOCK_LEN];
+	EVP_CIPHER_CTX      *e_ctx;     // encrypting context
+	EVP_CIPHER_CTX      *d_ctx;     // decrypting context
+	bool                encrypted;
 	list_t             entry;
 } connection_t;
 
@@ -391,5 +396,7 @@ uint32_t  Server_PrivateKey_Decypher(byte *to, byte *from);
 size_t    Sign_Client_Challenge(byte *to, byte *from);
 size_t    Encrypt_AESKey(RSA *publickey, byte *key, byte *iv, byte *cipher);
 void        hexDump (char *desc, void *addr, int len);
+size_t  SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
+size_t  SymmetricEncrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
 
 #endif

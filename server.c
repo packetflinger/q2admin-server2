@@ -351,6 +351,8 @@ void *ServerThread(void *arg)
 	uint8_t tmp;
 	FILE *fp;
 	byte cl_challenge_plaintext[CHALLENGE_LEN];
+	byte *e;
+	size_t len;
 
 	threadid = pthread_self();
 
@@ -407,6 +409,7 @@ void *ServerThread(void *arg)
 
 			// client wants the connection encrypted
 			if (hello.encrypted) {
+			    q2->connection.encrypted = true;
 				RAND_bytes(q2->connection.aeskey, AESKEY_LEN);  // session key
 				RAND_bytes(q2->connection.iv, AESBLOCK_LEN);    // initialization vector
 				Encrypt_AESKey(
@@ -458,6 +461,28 @@ void *ServerThread(void *arg)
 
 	if (memcmp(sv_challenge, cl_challenge_plaintext, CHALLENGE_LEN) == 0) {
 	    printf("%s is trusted\n", q2->teleportname);
+
+	    //hexDump("AES Key", q2->connection.aeskey, AESKEY_LEN);
+	    //hexDump("IV", q2->connection.iv, AESBLOCK_LEN);
+
+	    q2->connection.e_ctx = EVP_CIPHER_CTX_new();
+        EVP_EncryptInit_ex(
+                q2->connection.e_ctx,
+                EVP_aes_128_cbc(),
+                NULL,
+                q2->connection.aeskey,
+                q2->connection.iv
+        );
+
+        q2->connection.d_ctx = EVP_CIPHER_CTX_new();
+        EVP_DecryptInit_ex(
+                q2->connection.d_ctx,
+                EVP_aes_128_cbc(),
+                NULL,
+                q2->connection.aeskey,
+                q2->connection.iv
+        );
+
 	} else {
 	    printf("%s is NOT trusted, disconnecting\n", q2->teleportname);
 	    CloseConnection(q2);
@@ -485,6 +510,18 @@ void *ServerThread(void *arg)
 			printf("RECV error: %d - %s\n", errno, strerror(errno));
 			CloseConnection(q2);
 			break;
+		}
+
+		if (q2->connection.encrypted) {
+		    //hexDump("Received", msg.data, msg.length);
+		    e = malloc(msg.length);
+		    len = SymmetricDecrypt(q2, e, msg.data, msg.length);
+		    memset(msg.data, 0, msg.length);
+		    memcpy(msg.data, e, len);
+		    msg.length = len;
+		    free(e);
+
+		    //hexDump("decrypted", msg.data, msg.length);
 		}
 
 		// keep parsing msgs while data is in the buffer
@@ -520,8 +557,8 @@ void *ServerThread(void *arg)
 			case CMD_MAP:
 				ParseMap(q2, &msg);
 				break;
-			default:
-				printf("cmd: %d\n", cmd);
+			//default:
+				//printf("cmd: %d\n", cmd);
 			}
 		}
 
