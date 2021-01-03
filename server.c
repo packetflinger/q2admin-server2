@@ -453,7 +453,6 @@ void ERR_CloseConnection(q2_server_t *srv)
     srv->connected = false;
 }
 
-
 /**
  *
  */
@@ -572,6 +571,12 @@ void *ServerThread(void *arg)
 			LoadClientPublicKey(q2);
 
 			if (!ServerAuthResponse(q2, hello.challenge)) {
+			    MSG_WriteByte(SCMD_ERROR, &q2->msg);
+			    MSG_WriteByte(-1, &q2->msg);
+			    MSG_WriteByte(ERR_ENCRYPTION, &q2->msg);
+			    MSG_WriteString("Problem encrypting sv_challenge", &q2->msg);
+			    SendBuffer(q2);
+
 			    ERR_CloseConnection(q2);
 			    return NULL;
 			}
@@ -600,6 +605,12 @@ void *ServerThread(void *arg)
 
 	// Client failed auth, wrong keys or problems decrypting
 	if (!VerifyClientChallenge(q2, &msg)) {
+	    MSG_WriteByte(SCMD_ERROR, &q2->msg);
+        MSG_WriteByte(-1, &q2->msg);
+        MSG_WriteByte(ERR_UNAUTHORIZED, &q2->msg);
+        MSG_WriteString("Client authentication failed", &q2->msg);
+        SendBuffer(q2);
+
 	    ERR_CloseConnection(q2);
 	    return NULL;
 	}
