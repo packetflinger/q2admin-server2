@@ -173,7 +173,7 @@ void ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in)
 {
 	uint8_t client_id = MSG_ReadByte(in);
 
-	printf("%d just disconnected\n", client_id);
+	printf("%d disconnected from %s\n", client_id, srv->teleportname);
 
 	memset(&srv->players[client_id], 0, sizeof(q2_player_t));
 	srv->playercount--;
