@@ -165,6 +165,7 @@ typedef struct {
 	EVP_CIPHER_CTX      *e_ctx;     // encrypting context
 	EVP_CIPHER_CTX      *d_ctx;     // decrypting context
 	bool                encrypted;
+	byte                cl_challenge[CHALLENGE_LEN];
 	list_t             entry;
 } connection_t;
 
@@ -209,7 +210,8 @@ struct q2_server_s {
 	int sockfd;                    // dedicated socket for rcon commands
 	struct addrinfo *addr;         //
 	size_t addrlen;                // remove later
-	msg_buffer_t msg;              // remove later
+	msg_buffer_t msg;              // sending
+	msg_buffer_t msg_in;            // receiving
 	MYSQL *db;                     // this server's database connection
 	//char encryption_key[1400];     // key for decrypting msgs
 	q2_player_t players[256];

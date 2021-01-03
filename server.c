@@ -325,34 +325,218 @@ void SignalCatcher(int sig)
 	}
 }
 
+void LoadClientPublicKey(q2_server_t *q2)
+{
+    FILE *fp;
+    char keyfilename[200];
+
+    snprintf(keyfilename, sizeof(keyfilename), "keys/%d.pem", q2->key);
+    fp = fopen(keyfilename, "rb");
+
+    q2->publickey = RSA_new();
+
+    if (q2->publickey) {
+        q2->publickey = PEM_read_RSAPublicKey(fp, &q2->publickey, NULL, NULL);
+    }
+
+    fclose(fp);
+}
+
+/**
+ * A client sent us a challenge. Encrypt it and send it back along with
+ * our challenge to them (and any encryption keys required)
+ *
+ */
+bool ServerAuthResponse(q2_server_t *q2, byte *challenge)
+{
+    size_t len;
+    byte cl_challenge[CHALLENGE_LEN];
+    byte cipher[RSA_LEN];
+
+    // generate random data for a challenge and store for later comparison
+    RAND_bytes(cl_challenge, CHALLENGE_LEN);
+    strncpy(q2->connection.cl_challenge, cl_challenge, CHALLENGE_LEN);
+
+    // encrypt client's challenge to send back and auth server
+    len = Sign_Client_Challenge(cipher, challenge);
+    if (len == 0) {
+        RSA_free(q2->publickey);
+        return false;
+    }
+
+    // client won't send any more data until it receives this ACK
+    MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
+    MSG_WriteShort(len, &q2->msg);
+    MSG_WriteData(cipher, len, &q2->msg);
+
+    // client wants the connection encrypted
+    if (q2->connection.encrypted) {
+        RAND_bytes(q2->connection.aeskey, AESKEY_LEN);  // session key
+        RAND_bytes(q2->connection.iv, AESBLOCK_LEN);    // initialization vector
+        Encrypt_AESKey(
+                q2->publickey,
+                q2->connection.aeskey,
+                q2->connection.iv,
+                q2->connection.aeskey_cipher
+        );
+        MSG_WriteData(&q2->connection.aeskey_cipher, RSA_LEN, &q2->msg);
+    }
+
+    MSG_WriteData(cl_challenge, CHALLENGE_LEN, &q2->msg);
+    SendBuffer(q2);
+
+    return true;
+}
+
+
+bool VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg)
+{
+    size_t len;
+    size_t count;
+    byte cipher[RSA_LEN];
+    byte plaintext[CHALLENGE_LEN];
+
+    len = MSG_ReadShort(msg);
+    MSG_ReadData(msg, &cipher, len);
+
+    count = RSA_public_decrypt(
+            len,
+            cipher,
+            plaintext,
+            q2->publickey,
+            RSA_PKCS1_PADDING
+    );
+
+    if (count != CHALLENGE_LEN) {
+        return false;
+    }
+
+    if (memcmp(q2->connection.cl_challenge, plaintext, CHALLENGE_LEN) == 0) {
+        q2->connection.e_ctx = EVP_CIPHER_CTX_new();
+        q2->connection.d_ctx = EVP_CIPHER_CTX_new();
+        q2->trusted = true;
+    } else {
+        printf("%s connected but is NOT trusted, disconnecting\n", q2->teleportname);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Something went wrong like auth decryption failing, disconnect the client
+ * and free all resources allocated to them
+ */
+void ERR_CloseConnection(q2_server_t *srv)
+{
+    if (srv->publickey) {
+        RSA_free(srv->publickey);
+    }
+
+    if (srv->addr) {
+        freeaddrinfo(srv->addr);
+    }
+
+    if (srv->connection.d_ctx) {
+        EVP_CIPHER_CTX_free(srv->connection.d_ctx);
+    }
+
+    if (srv->connection.e_ctx) {
+        EVP_CIPHER_CTX_free(srv->connection.e_ctx);
+    }
+
+    if (srv->db) {
+        // close mysql?
+    }
+
+    close(srv->socket);
+    srv->connected = false;
+}
+
+
+/**
+ *
+ */
+void ReadMessageLoop(q2_server_t *q2)
+{
+    uint8_t cmd;
+    msg_buffer_t e;
+    msg_buffer_t *msg = &q2->msg_in;
+
+    // main server connection loop
+    while (true) {
+        memset(msg, 0, sizeof(msg_buffer_t));
+
+        // read data from q2 server
+        msg->length = recv(q2->socket, msg->data, sizeof(msg->data), 0);
+
+        if (msg->length == -1) {
+            perror(va("recv (server %d)",q2->key));
+        }
+
+        if (q2->connection.encrypted) {
+            memset(&e, 0, sizeof(msg_buffer_t));
+            e.length = SymmetricDecrypt(q2, e.data, msg->data, msg->length);
+            memset(msg, 0, sizeof(msg_buffer_t));
+            memcpy(msg->data, e.data, e.length);
+            msg->length = e.length;
+        }
+
+        hexDump("New Message:", msg->data, msg->length);
+
+        // keep parsing msgs while data is in the buffer
+        while (msg->index < msg->length) {
+
+            cmd = MSG_ReadByte(msg);
+
+            switch(cmd) {
+            case CMD_QUIT:
+                CloseConnection(q2);
+                break;
+            case CMD_PING:
+                Pong(q2);
+                break;
+            case CMD_PRINT:
+                ParsePrint(q2, msg);
+                break;
+            case CMD_COMMAND:
+                ParseCommand(q2, msg);
+                break;
+            case CMD_CONNECT:
+                ParsePlayerConnect(q2, msg);
+                break;
+            case CMD_PLAYERUPDATE:
+                ParsePlayerUpdate(q2, msg);
+                break;
+            case CMD_DISCONNECT:
+                ParsePlayerDisconnect(q2, msg);
+                break;
+            case CMD_PLAYERLIST:
+                ParsePlayerList(q2, msg);
+                break;
+            case CMD_MAP:
+                ParseMap(q2, msg);
+                break;
+            //default:
+                //printf("cmd: %d\n", cmd);
+            }
+        }
+
+        if (!q2->connected) {
+            break;
+        }
+    }
+}
 /**
  * Each q2 server connection gets one of these threads
  */
 void *ServerThread(void *arg)
 {
 	msg_buffer_t msg; // for receiving data only
-	uint32_t _ret, serverkey, q2arevision, sock, threadid;
-	uint16_t port;
-	uint8_t maxclients;
-	connection_t _q2con;
+	uint32_t _ret, sock, threadid;
 	q2_server_t *q2;
-	byte cmd;
-	ssize_t bytessent = 0;
-	size_t readsz = 0;
-	const SSL_METHOD *method;
 	byte challenge[CHALLENGE_LEN];
-	byte sv_challenge[CHALLENGE_LEN];
-	size_t ciphersz;
-	byte cipher[RSA_LEN];
-	unsigned char cl_challenge[256];
-	byte challenge_cipher[256];
-	int challenge_cipherlen;
 	hello_t hello;
-	uint8_t tmp;
-	FILE *fp;
-	byte cl_challenge_plaintext[CHALLENGE_LEN];
-	byte *e;
-	size_t len;
 
 	threadid = pthread_self();
 
@@ -366,6 +550,7 @@ void *ServerThread(void *arg)
 
 	// socket closed on other end
 	if (_ret == 0) {
+	    printf("%s disconnected\n", q2->teleportname);
 		return NULL;
 	}
 
@@ -378,51 +563,18 @@ void *ServerThread(void *arg)
 
 	FOR_EACH_SERVER(q2) {
 		if (hello.key == q2->key) {
-			printf("server found: %d\n", hello.key);
 			q2->socket = sock;
 			q2->connected = true;
-			q2->port = port;
-			q2->maxclients = maxclients;
+			q2->port = hello.port;
+			q2->maxclients = hello.max_clients;
+			q2->connection.encrypted = hello.encrypted;
 
-			// load server's public key into memory
-			char keyfilename[200];
-			sprintf(keyfilename, "keys/%d.pem", q2->key);
-			fp = fopen(keyfilename, "rb");
-			q2->publickey = RSA_new();
-			q2->publickey = PEM_read_RSAPublicKey(fp, &q2->publickey, NULL, NULL);
-			fclose(fp);
+			LoadClientPublicKey(q2);
 
-			RAND_bytes(sv_challenge, CHALLENGE_LEN);
-
-			// encrypt client's challenge to send back and auth server
-			challenge_cipherlen = Sign_Client_Challenge(challenge_cipher, hello.challenge);
-			if (challenge_cipherlen == 0) {
-			    RSA_free(q2->publickey);
-			    close(sock);
+			if (!ServerAuthResponse(q2, hello.challenge)) {
+			    ERR_CloseConnection(q2);
 			    return NULL;
 			}
-
-			// q2 server won't send any more data until it receives this ACK
-			MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
-			MSG_WriteShort(challenge_cipherlen, &q2->msg);
-			MSG_WriteData(challenge_cipher, challenge_cipherlen, &q2->msg);
-
-			// client wants the connection encrypted
-			if (hello.encrypted) {
-			    q2->connection.encrypted = true;
-				RAND_bytes(q2->connection.aeskey, AESKEY_LEN);  // session key
-				RAND_bytes(q2->connection.iv, AESBLOCK_LEN);    // initialization vector
-				Encrypt_AESKey(
-				        q2->publickey,
-				        q2->connection.aeskey,
-				        q2->connection.iv,
-				        q2->connection.aeskey_cipher
-				);
-				MSG_WriteData(&q2->connection.aeskey_cipher, RSA_LEN, &q2->msg);
-			}
-
-			MSG_WriteData(sv_challenge, CHALLENGE_LEN, &q2->msg);
-			SendBuffer(q2);
 
 			break;
 		}
@@ -441,369 +593,33 @@ void *ServerThread(void *arg)
 		close(sock);
 		return NULL;
 	}
-
-	printf("%s [%d] connected\n", q2->teleportname, hello.version);
 
 	// read the encrypted challenge response
 	memset(&msg, 0, sizeof(msg_buffer_t));
 	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
 
-	ciphersz = MSG_ReadShort(&msg);
-	MSG_ReadData(&msg, &cipher, ciphersz);
-
-	_ret = RSA_public_decrypt(
-	        ciphersz,
-	        cipher,
-	        cl_challenge_plaintext,
-	        q2->publickey,
-	        RSA_PKCS1_PADDING
-	);
-
-	if (memcmp(sv_challenge, cl_challenge_plaintext, CHALLENGE_LEN) == 0) {
-	    printf("%s is trusted\n", q2->teleportname);
-
-	    //hexDump("AES Key", q2->connection.aeskey, AESKEY_LEN);
-	    //hexDump("IV", q2->connection.iv, AESBLOCK_LEN);
-
-	    q2->connection.e_ctx = EVP_CIPHER_CTX_new();
-        EVP_EncryptInit_ex(
-                q2->connection.e_ctx,
-                EVP_aes_128_cbc(),
-                NULL,
-                q2->connection.aeskey,
-                q2->connection.iv
-        );
-
-        q2->connection.d_ctx = EVP_CIPHER_CTX_new();
-        EVP_DecryptInit_ex(
-                q2->connection.d_ctx,
-                EVP_aes_128_cbc(),
-                NULL,
-                q2->connection.aeskey,
-                q2->connection.iv
-        );
-
-	} else {
-	    printf("%s is NOT trusted, disconnecting\n", q2->teleportname);
-	    CloseConnection(q2);
+	// Client failed auth, wrong keys or problems decrypting
+	if (!VerifyClientChallenge(q2, &msg)) {
+	    ERR_CloseConnection(q2);
 	    return NULL;
 	}
 
-	// main server connection loop
-	while (true) {
-		memset(&msg, 0, sizeof(msg_buffer_t));
-		errno = 0;
+	printf("%s [%d] connected, trusted\n", q2->teleportname, hello.version);
 
-		// read data from q2 server
-		msg.length = recv(q2->socket, &msg.data, sizeof(msg.data), 0);
-
-		if (msg.length < 0) {
-			perror(va("recv (server %d)",q2->key));
-		}
-
-		if (msg.length == 0) {
-			printf("%s disconnected\n", q2->teleportname);
-			return NULL;
-		}
-
-		if (errno) {
-			printf("RECV error: %d - %s\n", errno, strerror(errno));
-			CloseConnection(q2);
-			break;
-		}
-
-		if (q2->connection.encrypted) {
-		    //hexDump("Received", msg.data, msg.length);
-		    e = malloc(msg.length);
-		    len = SymmetricDecrypt(q2, e, msg.data, msg.length);
-		    memset(msg.data, 0, msg.length);
-		    memcpy(msg.data, e, len);
-		    msg.length = len;
-		    free(e);
-
-		    //hexDump("decrypted", msg.data, msg.length);
-		}
-
-		// keep parsing msgs while data is in the buffer
-		while (msg.index < msg.length) {
-
-			cmd = MSG_ReadByte(&msg);
-
-			switch(cmd) {
-			case CMD_QUIT:
-				CloseConnection(q2);
-				break;
-			case CMD_PING:
-				Pong(q2);
-				break;
-			case CMD_PRINT:
-				ParsePrint(q2, &msg);
-				break;
-			case CMD_COMMAND:
-				ParseCommand(q2, &msg);
-				break;
-			case CMD_CONNECT:
-				ParsePlayerConnect(q2, &msg);
-				break;
-			case CMD_PLAYERUPDATE:
-				ParsePlayerUpdate(q2, &msg);
-				break;
-			case CMD_DISCONNECT:
-				ParsePlayerDisconnect(q2, &msg);
-				break;
-			case CMD_PLAYERLIST:
-				ParsePlayerList(q2, &msg);
-				break;
-			case CMD_MAP:
-				ParseMap(q2, &msg);
-				break;
-			//default:
-				//printf("cmd: %d\n", cmd);
-			}
-		}
-
-		if (!q2->connected) {
-			break;
-		}
-	}
+	ReadMessageLoop(q2);
 
 	return NULL;
 }
 
-/**
- * Each q2 server connection gets one of these threads
- */
-void *TLSServerThread(void *arg)
-{
-	msg_buffer_t msg; // for receiving data only
-	uint32_t _ret, serverkey, q2arevision, sock, threadid;
-	uint16_t port;
-	uint8_t maxclients;
-	connection_t _q2con;
-	q2_server_t *q2;
-	byte cmd;
-	ssize_t bytessent = 0;
-	size_t readsz = 0;
-	SSL *ssl;
-	SSL_CTX *ctx;
-	const SSL_METHOD *method;
-	BIO *io, *ssl_bio;
-	byte challenge[4];
-	size_t ciphersz;
-	byte cipher[200];
-	unsigned char cl_challenge[256];
-	byte challenge_cypher[256];
-	uint8_t challenge_cypherlen;
-
-
-	threadid = pthread_self();
-
-	sock = *(uint32_t *) arg;
-
-	// set the method to TLS (should default to TLS1.2)
-	if ((method = TLS_server_method()) < 0) {
-		printf("Error setting TLS method, closing connection and stopping thread\n");
-		close(sock);
-		return NULL;
-	}
-
-	// create a new SSL context
-	if ((ctx = SSL_CTX_new(method)) < 0) {
-		printf("Error creating TLS context, closing connection and stopping thread\n");
-		close(sock);
-		return NULL;
-	}
-
-	// set the SSL certificate to use
-	//if (SSL_CTX_use_certificate_file(ctx, "cert.pem", SSL_FILETYPE_PEM) < 0) {
-	if (SSL_CTX_use_certificate_file(ctx, config.certificate, SSL_FILETYPE_PEM) < 0) {
-		printf("Error setting up certificate\n");
-		SSL_CTX_free(ctx);
-		close(sock);
-		return NULL;
-	}
-
-	// set the private key for the certificate
-	//if (SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM) < 0) {
-	if (SSL_CTX_use_PrivateKey_file(ctx, config.private_key, SSL_FILETYPE_PEM) < 0) {
-		printf("Error setting up the private key\n");
-		SSL_CTX_free(ctx);
-		close(sock);
-		return NULL;
-	}
-
-	if ((ssl = SSL_new(ctx)) < 0) {
-		printf("Error creating SSL object\n");
-		SSL_CTX_free(ctx);
-		close(sock);
-		return NULL;
-	}
-
-	SSL_set_fd(ssl, sock);
-	SSL_accept(ssl);
-
-	// setup buffered in/out over TLS
-	io = BIO_new(BIO_f_buffer());
-	ssl_bio = BIO_new(BIO_f_ssl());
-	BIO_set_ssl(ssl_bio, ssl, BIO_CLOSE);
-	BIO_push(io, ssl_bio);
-
-	memset(&msg, 0, sizeof(msg_buffer_t));
-	memset(&challenge, 0, sizeof(challenge));
-
-	// only wait a max of 5 seconds during the connection/auth process for each message
-	SSL_CTX_set_timeout(ctx, 5);
-
-	readsz = BIO_read(ssl_bio, &msg.data, sizeof(msg.data));
-
-	printf("DEBUG: Read %d bytes: %s\n", strlen(msg.data), msg.data);
-
-	// first thing should be hello
-	if (MSG_ReadByte(&msg) != CMD_HELLO) {
-		printf("thread[%d] - protocol error, not a real client\n", threadid);
-		return NULL;
-	}
-
-	serverkey = MSG_ReadLong(&msg);
-	q2arevision = MSG_ReadLong(&msg);
-	port = MSG_ReadShort(&msg);
-	maxclients = MSG_ReadByte(&msg);
-	MSG_ReadData(&msg, cl_challenge, CHALLENGE_LEN);
-
-	printf("Client <%d> version %d connected\n", serverkey, q2arevision);
-
-	/**
-	 * Generate a challenge (a few random bytes of data) and send to client.
-	 * Client will encrypt and send back. We decrypt and if it matches, client
-	 * is trusted.
-	 */
-	RAND_bytes(&challenge[0], sizeof(challenge));
-	MSG_WriteByte(SCMD_HELLOACK, &msg);
-	MSG_WriteData(&challenge, sizeof(challenge), &msg);
-	BIO_write(ssl_bio, &msg.data, msg.length);
-	BIO_flush(ssl_bio);
-
-	// read the encrypted challenge
-	readsz = BIO_read(ssl_bio, &msg.data, sizeof(msg.data));
-
-
-	ciphersz = MSG_ReadShort(&msg);
-	MSG_ReadData(&msg, &cipher, ciphersz);
-
-	printf("thread[%d] - server: %d\n", threadid, serverkey);
-
-	// from this point we're auth'd, message can come in much slower
-	SSL_CTX_set_timeout(ctx, 300);
-
-	FOR_EACH_SERVER(q2) {
-		if (serverkey == q2->key) {
-			q2->socket = sock;
-			q2->connected = true;
-			q2->port = port;
-			q2->maxclients = maxclients;
-			q2->bio = ssl_bio;
-
-			//Client_PublicKey_Encypher(q2, &challenge_cypher[0], &cl_challenge[0]);
-
-			// q2 server won't send any more data until it receives this ACK
-			MSG_WriteByte(SCMD_HELLOACK, &q2->msg);
-			MSG_WriteShort(256, &q2->msg);
-			MSG_WriteData(&challenge_cypher[0], 256, &q2->msg);
-			SendBuffer(q2);
-
-			break;
-		}
-	}
-
-	// not a valid server
-	if (!q2) {
-		q2_server_t invalid_server;
-		printf("Invalid serverkey, closing connection\n");
-		invalid_server.socket = sock;
-		MSG_WriteByte(-1, &invalid_server.msg);
-		MSG_WriteByte(ERR_UNAUTHORIZED, &invalid_server.msg);
-		MSG_WriteString("Server key invalid", &invalid_server.msg);
-		SendBuffer(&invalid_server);
-
-		BIO_free_all(ssl_bio);
-		BIO_free_all(io);
-		SSL_shutdown(ssl);
-		SSL_free(ssl);
-		SSL_CTX_free(ctx);
-
-		close(sock);
-		return NULL;
-	}
-
-	// main server connection loop
-	while (true) {
-		memset(&msg, 0, sizeof(msg_buffer_t));
-		errno = 0;
-
-		// read data from q2 server
-		//msg.length = recv(q2->socket, &msg.data, sizeof(msg.data), 0);
-		msg.length = BIO_read(q2->bio, &msg.data, sizeof(msg.data));
-		if (msg.length < 0) {
-			perror(va("recv (server %d)",q2->key));
-		}
-
-		if (errno) {
-			printf("RECV error: %d - %s\n", errno, strerror(errno));
-			CloseConnection(q2);
-			break;
-		}
-
-		// keep parsing msgs while data is in the buffer
-		while (msg.index < msg.length) {
-
-			cmd = MSG_ReadByte(&msg);
-
-			switch(cmd) {
-			case CMD_QUIT:
-				CloseConnection(q2);
-				break;
-			case CMD_PING:
-				Pong(q2);
-				break;
-			case CMD_PRINT:
-				ParsePrint(q2, &msg);
-				break;
-			case CMD_COMMAND:
-				ParseCommand(q2, &msg);
-				break;
-			case CMD_CONNECT:
-				ParsePlayerConnect(q2, &msg);
-				break;
-			case CMD_PLAYERUPDATE:
-				ParsePlayerUpdate(q2, &msg);
-				break;
-			case CMD_DISCONNECT:
-				ParsePlayerDisconnect(q2, &msg);
-				break;
-			case CMD_PLAYERLIST:
-				ParsePlayerList(q2, &msg);
-				break;
-			case CMD_MAP:
-				ParseMap(q2, &msg);
-				break;
-			default:
-				printf("cmd: %d\n", cmd);
-			}
-		}
-
-		if (!q2->connected) {
-			break;
-		}
-	}
-
-	return NULL;
-}
 
 /**
  * Send the contents of the message buffer to the q2 server
  */
 void SendBuffer(q2_server_t *srv)
 {
+    byte buffer[0xffff];
+    size_t len;
+
 	if (!srv->connected) {
 		return;
 	}
@@ -812,18 +628,14 @@ void SendBuffer(q2_server_t *srv)
 		return;
 	}
 
-	if (srv->tls && !srv->bio) {
-		return;
+	if (srv->connection.encrypted && srv->trusted) {
+	    len = SymmetricEncrypt(srv, buffer, srv->msg.data, srv->msg.length);
+	    memset(&srv->msg, 0, sizeof(msg_buffer_t));
+	    memcpy(srv->msg.data, buffer, len);
+	    srv->msg.length = len;
 	}
 
-	//hexDump("Sending", srv->msg.data, srv->msg.length);
-
-	if (srv->tls) {
-		BIO_write(srv->bio, srv->msg.data, srv->msg.length);
-		BIO_flush(srv->bio);
-	} else {
-		send(srv->socket, srv->msg.data, srv->msg.length, 0);
-	}
+	send(srv->socket, srv->msg.data, srv->msg.length, 0);
 
 	memset(&srv->msg, 0, sizeof(msg_buffer_t));
 
@@ -896,74 +708,12 @@ void *Listener(void *arg)
 	return NULL;
 }
 
-/**
- * This is a separate thread that will listen for SSL/TLS connections
- */
-void *TLS_Listener(void *arg)
-{
-	uint32_t sock, cl_sock, clin_size, thread_id;
-	struct sockaddr_in servaddr, cliaddr;
-
-	memset(&servaddr, 0, sizeof(servaddr));
-	memset(&cliaddr, 0, sizeof(cliaddr));
-
-	OpenSSL_add_all_algorithms();
-	SSL_load_error_strings();
-
-	servaddr.sin_family = AF_UNSPEC; // IPv4 + IPv6
-	servaddr.sin_addr.s_addr = INADDR_ANY;
-	servaddr.sin_port = htons(config.tls_port);
-
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket");
-		return NULL;
-	}
-
-	if (bind(sock, (const struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-		perror("bind");
-		return NULL;
-	}
-
-	// start listening
-	if (listen(sock, 100) < 0) {
-		perror("listen");
-		return NULL;
-	}
-
-	printf("Listening on tcp/%d (tls)\n", config.tls_port);
-
-	while (true) {
-		cl_sock = accept(sock, (struct sockaddr *) &cliaddr, &clin_size);
-		if (cl_sock < 0) {
-			perror("accept");
-			continue;
-		}
-
-		thread_id = find_available_thread_slot();
-
-		// hand connection off to new thread
-		pthread_create(&threads[thread_id], NULL, TLSServerThread, &cl_sock);
-	}
-
-	return NULL;
-}
-
 
 /**
  * Entry point
  */
 int main(int argc, char **argv)
 {
-	/*
-	uint32_t ret, sv_sock, cl_sock;
-	struct sockaddr_in servaddr, cliaddr;
-	uint32_t clin_size = 0;
-	pthread_t threadid, clientthread;
-	connection_t conn;
-	SSL *ssl;
-	SSL_CTX *ssl_ctx;
-	const SSL_METHOD *ssl_method;
-*/
 	threadrunning = false;
 
 	memset(&threads, 0, sizeof(pthread_t) * MAX_THREADS);
