@@ -38,6 +38,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <poll.h>
 
 #include "list.h"
 
@@ -50,7 +51,7 @@
 #define random()                       ((rand () & 0x7fff) / ((float)0x7fff))
 #define ROUNDF(f,c) (((float)((int)((f) * (c))) / (c)))
 
-#define PORT		9988
+#define PORT		"9988"
 #define MAXLINE 	1390
 #define CONFIGFILE	"q2a.ini"
 #define VER_REQ     0
@@ -400,5 +401,8 @@ size_t    Encrypt_AESKey(RSA *publickey, byte *key, byte *iv, byte *cipher);
 void        hexDump (char *desc, void *addr, int len);
 size_t  SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
 size_t  SymmetricEncrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
+
+// test
+void    PollServer(void);
 
 #endif

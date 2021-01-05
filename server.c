@@ -19,7 +19,7 @@ void LoadConfig(char *filename)
 {
 	// problems reading file, just use default port
 	if (access(filename, F_OK) == -1) {
-		config.port = PORT;
+		config.port = atoi(PORT);
 		return;
 	}
 
@@ -720,6 +720,7 @@ void *Listener(void *arg)
 }
 
 
+
 /**
  * Entry point
  */
@@ -749,8 +750,153 @@ int main(int argc, char **argv)
 	(void)signal(SIGINT, SignalCatcher);
 
 	//pthread_create(&threads[0], NULL, TLS_Listener, NULL);
-	Listener(NULL);
+	//Listener(NULL);
+
+	PollServer();
 
 	return EXIT_SUCCESS;
+}
+
+int get_listener_socket(void)
+{
+    int listener;
+    int yes = 1;
+    int rv;
+
+    struct addrinfo hints, *ai, *p;
+
+    // Get us a socket and bind it
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
+        exit(1);
+    }
+
+    for (p = ai; p != NULL; p = p->ai_next) {
+        listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (listener < 0) {
+            continue;
+        }
+
+        // Lose the pesky "address already in use" error message
+        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+        if (bind(listener, p->ai_addr, p->ai_addrlen) < 0) {
+            close(listener);
+            continue;
+        }
+
+        break;
+    }
+
+    freeaddrinfo(ai); // All done with this
+
+    // If we got here, it means we didn't get bound
+    if (p == NULL) {
+        return -1;
+    }
+
+    // Listen
+    if (listen(listener, 10) == -1) {
+        return -1;
+    }
+
+    return listener;
+}
+
+void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET) {
+        return &(((struct sockaddr_in*)sa)->sin_addr);
+    }
+
+    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+void PollServer(void)
+{
+    uint32_t listener;
+    uint32_t newsocket;
+    uint32_t socket_size = 0;
+    uint32_t socket_count = 0;
+    q2_server_t *q2;
+    msg_buffer_t msg;
+    struct pollfd *sockets;
+    uint32_t poll_count = 0;
+
+    struct sockaddr_storage remoteaddr;
+    socklen_t addrlen;
+
+    char remote_addr[INET6_ADDRSTRLEN];
+
+    FOR_EACH_SERVER(q2) {
+        socket_size++;
+    }
+
+    sockets = malloc(socket_size * sizeof(struct pollfd) + 5);
+
+    listener = get_listener_socket();
+    if (listener == -1) {
+        fprintf(stderr, "error getting listening socket\n");
+        exit(1);
+    }
+
+    sockets[0].fd = listener;
+    sockets[0].events = POLLIN;
+    socket_count = 1;
+
+    while (true) {
+        poll_count = poll(sockets, socket_count, -1);   // block
+        if (poll_count == -1) {
+            perror("poll");
+            exit(1);
+        }
+
+        for (int i=0; i<socket_count; i++) {
+            if (sockets[i].revents & POLLIN) {
+                if (sockets[i].fd == listener) {
+                    addrlen = sizeof(remoteaddr);
+                    newsocket = accept(listener, (struct sockaddr *) &remoteaddr, &addrlen);
+
+                    if (newsocket == -1) {
+                        perror("accept");
+                    } else {
+                        socket_count++;
+                        sockets[socket_count-1].fd = newsocket;
+                        sockets[socket_count-1].events = POLLIN;
+
+                        printf("pollserver: new connection from %s on socket %d\n",
+                                inet_ntop(
+                                        remoteaddr.ss_family,
+                                        get_in_addr((struct sockaddr*)&remoteaddr),
+                                        remote_addr,
+                                        INET6_ADDRSTRLEN
+                                ),
+                                newsocket
+                        );
+
+                    }
+                } else {    // just a client
+                    msg.length = recv(sockets[i].fd, msg.data, sizeof(msg.data), 0);
+
+                    if (msg.length <= 0) {
+                        if (msg.length == 0) {
+                            printf("client disconnected\n");
+                        } else {
+                            perror("recv");
+                        }
+
+                        close(sockets[i].fd);
+                    } else {
+                        hexDump("Received", msg.data, msg.length);
+                    }
+                }
+            }
+        }
+    }
 }
 
