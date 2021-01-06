@@ -4,6 +4,10 @@
 LIST_DECL(q2srvlist);
 LIST_DECL(connlist);
 
+struct pollfd *sockets;
+uint32_t socket_size = 0;
+uint32_t socket_count = 0;
+
 /**
  * Print out an error message and quit
  */
@@ -330,6 +334,7 @@ void LoadClientPublicKey(q2_server_t *q2)
     FILE *fp;
     char keyfilename[200];
 
+    memset(keyfilename, 0, sizeof(keyfilename));
     snprintf(keyfilename, sizeof(keyfilename), "keys/%d.pem", q2->key);
     fp = fopen(keyfilename, "rb");
 
@@ -646,7 +651,7 @@ void SendBuffer(q2_server_t *srv)
 	    srv->msg.length = len;
 	}
 
-	send(srv->socket, srv->msg.data, srv->msg.length, 0);
+	send(sockets[srv->index].fd, srv->msg.data, srv->msg.length, 0);
 
 	memset(&srv->msg, 0, sizeof(msg_buffer_t));
 
@@ -817,15 +822,72 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+static q2_server_t *get_server(uint32_t index)
+{
+    q2_server_t *q2;
+
+    FOR_EACH_SERVER(q2) {
+        if (q2->index == index) {
+            return q2;
+        }
+    }
+
+    return NULL;
+}
+
+/**
+ * Identify the new incoming server connection
+ */
+static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
+{
+    hello_t h;
+    q2_server_t *q2;
+
+    if (MSG_ReadByte(msg) != CMD_HELLO) {
+        return NULL;
+    }
+
+    ParseHello(&h, msg);
+
+    FOR_EACH_SERVER(q2) {
+        if (h.key == q2->key) {
+            q2->index = index;
+            q2->connected = true;
+            q2->port = h.port;
+            q2->maxclients = h.max_clients;
+            q2->connection.encrypted = h.encrypted;
+
+            LoadClientPublicKey(q2);
+
+            printf("Found server and loaded key: %d\n", &q2->publickey);
+
+            if (!ServerAuthResponse(q2, h.challenge)) {
+                MSG_WriteByte(SCMD_ERROR, &q2->msg);
+                MSG_WriteByte(-1, &q2->msg);
+                MSG_WriteByte(ERR_ENCRYPTION, &q2->msg);
+                MSG_WriteString("Problem encrypting sv_challenge", &q2->msg);
+                SendBuffer(q2);
+
+                //ERR_CloseConnection(q2);
+                return NULL;
+            }
+
+            return q2;
+            break;
+        }
+    }
+
+    return NULL;
+}
+
 void PollServer(void)
 {
     uint32_t listener;
     uint32_t newsocket;
-    uint32_t socket_size = 0;
-    uint32_t socket_count = 0;
+
     q2_server_t *q2;
     msg_buffer_t msg;
-    struct pollfd *sockets;
+
     uint32_t poll_count = 0;
 
     struct sockaddr_storage remoteaddr;
@@ -881,7 +943,10 @@ void PollServer(void)
 
                     }
                 } else {    // just a client
+                    q2 = get_server(i);
+
                     msg.length = recv(sockets[i].fd, msg.data, sizeof(msg.data), 0);
+
 
                     if (msg.length <= 0) {
                         if (msg.length == 0) {
@@ -893,6 +958,17 @@ void PollServer(void)
                         close(sockets[i].fd);
                     } else {
                         hexDump("Received", msg.data, msg.length);
+
+                        if (!q2) {
+                            q2 = new_server(&msg, i);
+
+                            // not a real client, hang up and move on
+                            if (!q2) {
+                                printf("Invalid client, closing connection\n");
+                                close(sockets[i].fd);
+                                continue;
+                            }
+                        }
                     }
                 }
             }

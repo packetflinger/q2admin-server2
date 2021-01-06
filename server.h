@@ -188,6 +188,8 @@ typedef struct {
  * loaded into these structures. When user updates the website, these are reloaded
  */
 struct q2_server_s {
+    uint32_t index;             // the "i" in poll's socket array
+    //struct pollfd *sock;
 	bool connected;
 	uint32_t socket;
 	//ssl_connection_t ssl;
