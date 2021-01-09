@@ -28,7 +28,7 @@ OBJS :=	client.o \
 
 CFLAGS += $(MY_CFLAGS) $(GLIB_CFLAGS)
 LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -L/usr/local/jansson -ljansson
-TARGET ?= q2admin-server
+TARGET ?= q2admind
 	
 all: $(TARGET)
 
