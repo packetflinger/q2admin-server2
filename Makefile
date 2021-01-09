@@ -27,7 +27,7 @@ OBJS :=	\
 		util.o
 
 CFLAGS += $(MY_CFLAGS) $(GLIB_CFLAGS)
-LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -L/usr/local/jansson -ljansson
+LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -lcrypto
 TARGET ?= q2admind
 	
 all: $(TARGET)
