@@ -16,7 +16,7 @@ CFLAGS ?= -g --std=c99 -D_POSIX_C_SOURCE=200112L -I/usr/local/jannson/include
 
 HEADERS := server.h list.h
 
-OBJS :=	client.o \
+OBJS :=	\
 		cmd.o \
 		crypto.o \
 		log.o \
