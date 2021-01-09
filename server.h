@@ -290,6 +290,7 @@ typedef enum {
 	SCMD_SAYCLIENT,
 	SCMD_SAYALL,
 	SCMD_AUTH,
+	SCMD_TRUSTED,
 } ra_server_cmd_t;
 
 
@@ -376,6 +377,9 @@ char      *Info_ValueForKey(char *s, char *key);
 
 void      TP_GetServers(q2_server_t *srv, uint8_t player, char *target);
 
+void    Pong(q2_server_t *srv);
+
+void    ParseMessage(q2_server_t *q2, msg_buffer_t *msg);
 void      ParsePrint(q2_server_t *srv, msg_buffer_t *in);
 void      ParseCommand(q2_server_t *srv, msg_buffer_t *in);
 void      ParseTeleport(q2_server_t *srv, msg_buffer_t *in);
@@ -387,6 +391,7 @@ void      ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in);
 void      ParseMap(q2_server_t *srv, msg_buffer_t *in);
 void      ParsePlayerList(q2_server_t *srv, msg_buffer_t *in);
 void      ParseHello(hello_t *h, msg_buffer_t *in);
+void    ParseAuth(q2_server_t *q2, msg_buffer_t *in);
 
 void      *ClientThread(void *arg);
 void      CL_HandleInput(gchar **in);
@@ -403,6 +408,7 @@ size_t    Encrypt_AESKey(RSA *publickey, byte *key, byte *iv, byte *cipher);
 void        hexDump (char *desc, void *addr, int len);
 size_t  SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
 size_t  SymmetricEncrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
+bool    VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg);
 
 // test
 void    PollServer(void);

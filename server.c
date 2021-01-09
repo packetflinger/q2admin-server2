@@ -230,7 +230,7 @@ q2_server_t *find_server_by_name(const char *name)
 /**
  * Send a reply to a q2 server PING request
  */
-static void Pong(q2_server_t *srv)
+void Pong(q2_server_t *srv)
 {
 	MSG_WriteByte(SCMD_PONG, &srv->msg);
 	SendBuffer(srv);
@@ -276,17 +276,6 @@ char *Info_ValueForKey(char *s, char *key)
             return "";
         s++;
     }
-}
-
-/**
- * XOR the current message buffer with the encryption key for this server.
- */
-static void MSG_Decrypt(char* key) {
-	uint16_t i;
-
-	for (i=msg.index; i<msg.length; i++) {
-		msg.data[i] ^= key[i];
-	}
 }
 
 
@@ -458,174 +447,6 @@ void ERR_CloseConnection(q2_server_t *srv)
     srv->connected = false;
 }
 
-/**
- *
- */
-void ReadMessageLoop(q2_server_t *q2)
-{
-    uint8_t cmd;
-    msg_buffer_t e;
-    msg_buffer_t *msg = &q2->msg_in;
-
-    // main server connection loop
-    while (true) {
-        memset(msg, 0, sizeof(msg_buffer_t));
-
-        // read data from q2 server
-        msg->length = recv(q2->socket, msg->data, sizeof(msg->data), 0);
-
-        if (msg->length == -1) {
-            perror(va("recv (server %d)",q2->key));
-        }
-
-        if (q2->connection.encrypted) {
-            memset(&e, 0, sizeof(msg_buffer_t));
-            e.length = SymmetricDecrypt(q2, e.data, msg->data, msg->length);
-            memset(msg, 0, sizeof(msg_buffer_t));
-            memcpy(msg->data, e.data, e.length);
-            msg->length = e.length;
-        }
-
-        hexDump("New Message:", msg->data, msg->length);
-
-        // keep parsing msgs while data is in the buffer
-        while (msg->index < msg->length) {
-
-            cmd = MSG_ReadByte(msg);
-
-            switch(cmd) {
-            case CMD_QUIT:
-                CloseConnection(q2);
-                break;
-            case CMD_PING:
-                Pong(q2);
-                break;
-            case CMD_PRINT:
-                ParsePrint(q2, msg);
-                break;
-            case CMD_COMMAND:
-                ParseCommand(q2, msg);
-                break;
-            case CMD_CONNECT:
-                ParsePlayerConnect(q2, msg);
-                break;
-            case CMD_PLAYERUPDATE:
-                ParsePlayerUpdate(q2, msg);
-                break;
-            case CMD_DISCONNECT:
-                ParsePlayerDisconnect(q2, msg);
-                break;
-            case CMD_PLAYERLIST:
-                ParsePlayerList(q2, msg);
-                break;
-            case CMD_MAP:
-                ParseMap(q2, msg);
-                break;
-            //default:
-                //printf("cmd: %d\n", cmd);
-            }
-        }
-
-        if (!q2->connected) {
-            break;
-        }
-    }
-}
-/**
- * Each q2 server connection gets one of these threads
- */
-void *ServerThread(void *arg)
-{
-	msg_buffer_t msg; // for receiving data only
-	uint32_t _ret, sock, threadid;
-	q2_server_t *q2;
-	byte challenge[CHALLENGE_LEN];
-	hello_t hello;
-
-	threadid = pthread_self();
-
-	sock = *(uint32_t *) arg;
-
-	memset(&msg, 0, sizeof(msg_buffer_t));
-	memset(&challenge, 0, sizeof(challenge));
-	memset(&hello, 0, sizeof(hello_t));
-
-	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
-
-	// socket closed on other end
-	if (_ret == 0) {
-	    printf("%s disconnected\n", q2->teleportname);
-		return NULL;
-	}
-
-	if (MSG_ReadByte(&msg) != CMD_HELLO) {
-		printf("thread[%d] - protocol error, not a real client\n", threadid);
-		return NULL;
-	}
-
-	ParseHello(&hello, &msg);
-
-	FOR_EACH_SERVER(q2) {
-		if (hello.key == q2->key) {
-			q2->socket = sock;
-			q2->connected = true;
-			q2->port = hello.port;
-			q2->maxclients = hello.max_clients;
-			q2->connection.encrypted = hello.encrypted;
-
-			LoadClientPublicKey(q2);
-
-			if (!ServerAuthResponse(q2, hello.challenge)) {
-			    MSG_WriteByte(SCMD_ERROR, &q2->msg);
-			    MSG_WriteByte(-1, &q2->msg);
-			    MSG_WriteByte(ERR_ENCRYPTION, &q2->msg);
-			    MSG_WriteString("Problem encrypting sv_challenge", &q2->msg);
-			    SendBuffer(q2);
-
-			    ERR_CloseConnection(q2);
-			    return NULL;
-			}
-
-			break;
-		}
-	}
-
-	// not a valid server
-	if (!q2) {
-		q2_server_t invalid_server;
-		printf("Invalid serverkey, closing connection\n");
-		invalid_server.socket = sock;
-		MSG_WriteByte(-1, &invalid_server.msg);
-		MSG_WriteByte(ERR_UNAUTHORIZED, &invalid_server.msg);
-		MSG_WriteString("Server key invalid", &invalid_server.msg);
-		SendBuffer(&invalid_server);
-
-		close(sock);
-		return NULL;
-	}
-
-	// read the encrypted challenge response
-	memset(&msg, 0, sizeof(msg_buffer_t));
-	_ret = recv(sock, &msg.data, sizeof(msg.data), 0);
-
-	// Client failed auth, wrong keys or problems decrypting
-	if (!VerifyClientChallenge(q2, &msg)) {
-	    MSG_WriteByte(SCMD_ERROR, &q2->msg);
-        MSG_WriteByte(-1, &q2->msg);
-        MSG_WriteByte(ERR_UNAUTHORIZED, &q2->msg);
-        MSG_WriteString("Client authentication failed", &q2->msg);
-        SendBuffer(q2);
-
-	    ERR_CloseConnection(q2);
-	    return NULL;
-	}
-
-	printf("%s [%d] connected, trusted\n", q2->teleportname, hello.version);
-
-	ReadMessageLoop(q2);
-
-	return NULL;
-}
 
 
 /**
@@ -658,71 +479,6 @@ void SendBuffer(q2_server_t *srv)
 	return;
 }
 
-void CloseConnection(q2_server_t *srv)
-{
-    if (srv->publickey) {
-        RSA_free(srv->publickey);
-    }
-
-	close(srv->socket);
-	srv->connected = false;
-}
-
-/**
- * This is a separate thread that will listen for vanilla unencrypted connections
- */
-void *Listener(void *arg)
-{
-	uint32_t sock, cl_sock, clin_size, thread_id;
-	struct sockaddr_in servaddr, cliaddr;
-	int option = 1;
-
-	memset(&servaddr, 0, sizeof(servaddr));
-	memset(&cliaddr, 0, sizeof(cliaddr));
-
-	//OpenSSL_add_all_algorithms();
-	//SSL_load_error_strings();
-
-	servaddr.sin_family = AF_UNSPEC; // IPv4 + IPv6
-	servaddr.sin_addr.s_addr = INADDR_ANY;
-	servaddr.sin_port = htons(config.port);
-
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		perror("socket");
-		return NULL;
-	}
-
-	// avoid annoying "address already in use errors when closing and opening sockets quickly
-	setsockopt(sock, SOL_SOCKET, (SO_REUSEPORT | SO_REUSEADDR), (char *) &option, sizeof(option));
-
-	if (bind(sock, (const struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-		perror("bind");
-		return NULL;
-	}
-
-	// start listening
-	if (listen(sock, 100) < 0) {
-		perror("listen");
-		return NULL;
-	}
-
-	printf("Listening on tcp/%d\n", config.port);
-
-	while (true) {
-		cl_sock = accept(sock, (struct sockaddr *) &cliaddr, &clin_size);
-		if (cl_sock < 0) {
-			perror("accept");
-			continue;
-		}
-
-		thread_id = find_available_thread_slot();
-
-		// hand connection off to new thread
-		pthread_create(&threads[thread_id], NULL, ServerThread, &cl_sock);
-	}
-
-	return NULL;
-}
 
 
 
@@ -754,13 +510,74 @@ int main(int argc, char **argv)
 
 	(void)signal(SIGINT, SignalCatcher);
 
-	//pthread_create(&threads[0], NULL, TLS_Listener, NULL);
-	//Listener(NULL);
-
 	PollServer();
 
 	return EXIT_SUCCESS;
 }
+
+
+/**
+ * Add a socket to the poll array
+ */
+void add_server_socket(uint32_t socket)
+{
+    sockets[socket_count].fd = socket;
+    sockets[socket_count].events = POLLIN;
+    socket_count++;
+}
+
+
+/**
+ * Remove the given socket from the poll array.
+ * Rebuild the array to make sure it's contiguous
+ */
+void remove_server_socket()
+{
+    q2_server_t *q2;
+    uint32_t i = 1; // 0 is the listener
+
+    FOR_EACH_SERVER(q2) {
+        if (!q2->connected) {
+            continue;
+        }
+
+        sockets[i].fd = q2->socket;
+        sockets[i].events = POLLIN;
+        q2->index = i;
+        i++;
+    }
+
+    socket_count = i;
+}
+
+
+/**
+ *
+ */
+void CloseConnection(q2_server_t *srv)
+{
+    if (srv->publickey) {
+        RSA_free(srv->publickey);
+    }
+
+    if (srv->addr) {
+        freeaddrinfo(srv->addr);
+    }
+
+    if (srv->connection.d_ctx) {
+        EVP_CIPHER_CTX_free(srv->connection.d_ctx);
+    }
+
+    if (srv->connection.e_ctx) {
+        EVP_CIPHER_CTX_free(srv->connection.e_ctx);
+    }
+
+    close(srv->socket);
+    srv->connected = false;
+    printf("%s disconnected\n", srv->teleportname);
+    remove_server_socket();
+}
+
 
 int get_listener_socket(void)
 {
@@ -852,6 +669,7 @@ static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
     FOR_EACH_SERVER(q2) {
         if (h.key == q2->key) {
             q2->index = index;
+            q2->socket = sockets[index].fd;
             q2->connected = true;
             q2->port = h.port;
             q2->maxclients = h.max_clients;
@@ -880,6 +698,13 @@ static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
     return NULL;
 }
 
+
+
+
+
+/**
+ *
+ */
 void PollServer(void)
 {
     uint32_t listener;
@@ -927,38 +752,37 @@ void PollServer(void)
                     if (newsocket == -1) {
                         perror("accept");
                     } else {
-                        socket_count++;
-                        sockets[socket_count-1].fd = newsocket;
-                        sockets[socket_count-1].events = POLLIN;
+                        add_server_socket(newsocket);
 
-                        printf("pollserver: new connection from %s on socket %d\n",
+                        printf("New connection from %s\n",
                                 inet_ntop(
                                         remoteaddr.ss_family,
-                                        get_in_addr((struct sockaddr*)&remoteaddr),
+                                        get_in_addr((struct sockaddr*) &remoteaddr),
                                         remote_addr,
                                         INET6_ADDRSTRLEN
-                                ),
-                                newsocket
+                                )
                         );
-
                     }
                 } else {    // just a client
                     q2 = get_server(i);
 
+                    memset(&msg, 0, sizeof(msg_buffer_t));
                     msg.length = recv(sockets[i].fd, msg.data, sizeof(msg.data), 0);
 
 
                     if (msg.length <= 0) {
                         if (msg.length == 0) {
-                            printf("client disconnected\n");
+                            printf("%s disconnected abnormally\n", q2->teleportname);
                         } else {
                             perror("recv");
                         }
 
+                        q2->connected = false;
+                        q2->socket = 0;
                         close(sockets[i].fd);
-                    } else {
-                        hexDump("Received", msg.data, msg.length);
+                        remove_server_socket();
 
+                    } else {
                         if (!q2) {
                             q2 = new_server(&msg, i);
 
@@ -969,6 +793,8 @@ void PollServer(void)
                                 continue;
                             }
                         }
+
+                        ParseMessage(q2, &msg);
                     }
                 }
             }

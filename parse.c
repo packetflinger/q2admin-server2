@@ -2,6 +2,65 @@
 
 
 /**
+ *
+ */
+void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
+{
+    uint8_t cmd;
+    msg_buffer_t e;
+
+    if (q2->connection.encrypted) {
+        memset(&e, 0, sizeof(msg_buffer_t));
+        e.length = SymmetricDecrypt(q2, e.data, msg->data, msg->length);
+        memset(msg, 0, sizeof(msg_buffer_t));
+        memcpy(msg->data, e.data, e.length);
+        msg->length = e.length;
+    }
+
+    hexDump("New Message", msg->data, msg->length);
+
+    // keep parsing msgs while data is in the buffer
+    while (msg->index < msg->length) {
+        cmd = MSG_ReadByte(msg);
+
+        switch(cmd) {
+        case CMD_AUTH:
+            ParseAuth(q2, msg);
+            break;
+        case CMD_QUIT:
+            CloseConnection(q2);
+            break;
+        case CMD_PING:
+            Pong(q2);
+            break;
+        case CMD_PRINT:
+            ParsePrint(q2, msg);
+            break;
+        case CMD_COMMAND:
+            ParseCommand(q2, msg);
+            break;
+        case CMD_CONNECT:
+            ParsePlayerConnect(q2, msg);
+            break;
+        case CMD_PLAYERUPDATE:
+            ParsePlayerUpdate(q2, msg);
+            break;
+        case CMD_DISCONNECT:
+            ParsePlayerDisconnect(q2, msg);
+            break;
+        case CMD_PLAYERLIST:
+            ParsePlayerList(q2, msg);
+            break;
+        case CMD_MAP:
+            ParseMap(q2, msg);
+            break;
+        //default:
+            //printf("cmd: %d\n", cmd);
+        }
+    }
+}
+
+/**
  * Parse the first message sent from the client
  */
 void ParseHello(hello_t *h, msg_buffer_t *in)
@@ -208,4 +267,21 @@ void ParsePlayerList(q2_server_t *srv, msg_buffer_t *in)
 
 		printf("Found %s\n", p->name);
 	}
+}
+
+void ParseAuth(q2_server_t *q2, msg_buffer_t *in)
+{
+    if (!VerifyClientChallenge(q2, in)) {
+        MSG_WriteByte(SCMD_ERROR, &q2->msg);
+        MSG_WriteByte(-1, &q2->msg);
+        MSG_WriteByte(ERR_UNAUTHORIZED, &q2->msg);
+        MSG_WriteString("Client authentication failed", &q2->msg);
+        SendBuffer(q2);
+
+        //ERR_CloseConnection(q2);
+    }
+
+    printf("%s is trusted\n", q2->teleportname);
+    MSG_WriteByte(SCMD_TRUSTED, &q2->msg);
+    SendBuffer(q2);
 }
