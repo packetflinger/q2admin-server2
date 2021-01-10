@@ -40,6 +40,10 @@ void LoadConfig(char *filename)
 	}
 
 	gchar *val;
+
+	val = g_key_file_get_string(key_file, "database", "file", &error);
+	strncpy(config.db_file, val, sizeof(config.db_file));
+
 	val = g_key_file_get_string(key_file, "database", "host", &error);
 	strncpy(config.db_host, val, sizeof(config.db_host));
 
@@ -76,6 +80,7 @@ void LoadConfig(char *filename)
 /**
  * MySQL test function
  */
+/*
 char *getNow(MYSQL *m)
 {
 	static MYSQL_RES *res;
@@ -95,6 +100,7 @@ char *getNow(MYSQL *m)
 
 	return "";
 }
+*/
 
 /**
  * Variable assignment, just makes building strings easier

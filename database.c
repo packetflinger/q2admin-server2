@@ -17,13 +17,13 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
+#include "server.h"
 
-#include <sqlite3.h>
 
 static unsigned long last_timestamp;
 static unsigned long norm_timestamp;
 
-static sqlite3 *db;
+//static sqlite3 *db;
 
 static unsigned long long rowid;
 static int numcols;
@@ -62,6 +62,7 @@ static int db_query_execute(sqlite3_callback cb, const char *fmt, ...)
 #define db_query(...)   db_query_execute(db_query_callback, __VA_ARGS__)
 #define db_execute(...) db_query_execute(NULL, __VA_ARGS__)
 
+/*
 static void log_client(gclient_t *c)
 {
     fragstat_t *fs;
@@ -199,7 +200,7 @@ void G_LogClients(void)
 
     db_execute("COMMIT");
 }
-
+*/
 static const char schema[] =
 "BEGIN TRANSACTION;\n"
 
@@ -247,40 +248,37 @@ static const char schema[] =
 
 "COMMIT;\n";
 
-void G_OpenDatabase(void)
+void DB_OpenDatabase(void)
 {
-    char buffer[MAX_OSPATH];
+    char buffer[2048];
     char *err = NULL;
 
-    cvar_t *g_sql_database = gi.cvar("g_sql_database", "", CVAR_LATCH);
-    cvar_t *g_sql_async = gi.cvar("g_sql_async", "0", CVAR_LATCH);
+    //G_CheckFilenameVariable(g_sql_database);
 
-    G_CheckFilenameVariable(g_sql_database);
-
-    if (!game.dir[0] || !g_sql_database->string[0])
-        return;
-
-    if (Q_snprintf(buffer, sizeof(buffer), "%s/%s.db", game.dir, g_sql_database->string) >= sizeof(buffer)) {
-        gi.dprintf("SQLite database path too long\n");
+    if (!config.db_file[0]) {
         return;
     }
+
+    //snprintf(buffer, sizeof(buffer), "%s", config.db_file);
 
     if (sqlite3_open(buffer, &db)) {
-        gi.dprintf("Couldn't open SQLite database: %s\n", sqlite3_errmsg(db));
+        printf("Couldn't open SQLite database: %s\n", sqlite3_errmsg(db));
         goto fail;
     }
 
-    if ((int)g_sql_async->value && sqlite3_exec(db, "PRAGMA synchronous=OFF", NULL, NULL, &err)) {
-        gi.dprintf("Couldn't make SQLite database asynchronous: %s\n", err);
+    /*
+    if (0 && sqlite3_exec(db, "PRAGMA synchronous=OFF", NULL, NULL, &err)) {
+        printf("Couldn't make SQLite database asynchronous: %s\n", err);
         goto fail;
     }
+    */
 
     if (sqlite3_exec(db, schema, NULL, NULL, &err)) {
-        gi.dprintf("Couldn't create SQLite database schema: %s\n", err);
+        printf("Couldn't create SQLite database schema: %s\n", err);
         goto fail;
     }
 
-    gi.dprintf("Logging to SQLite database '%s'\n", buffer);
+    printf("Using SQLite database '%s'\n", buffer);
     return;
 
 fail:
@@ -292,10 +290,10 @@ fail:
     }
 }
 
-void G_CloseDatabase(void)
+void DB_CloseDatabase(void)
 {
     if (db) {
-        gi.dprintf("Closing SQLite database\n");
+        printf("Closing SQLite database\n");
         sqlite3_close(db);
         db = NULL;
     }

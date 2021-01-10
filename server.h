@@ -30,8 +30,9 @@
 #include <openssl/rand.h>
 #include <openssl/pem.h>
 
-#include <mysql/mysql.h>
+// #include <mysql/mysql.h>
 #include <glib.h>
+#include <sqlite3.h>
 
 #include <stdbool.h>
 #include <pthread.h>
@@ -86,7 +87,6 @@ typedef unsigned char byte;
 #define FOR_EACH_SERVER(s) \
     LIST_FOR_EACH(q2_server_t, s, &q2srvlist, entry)
 
-
 /**
  * Each server message
  */
@@ -114,6 +114,7 @@ typedef struct {
 	uint16_t port;
 	uint16_t client_port;
 	uint16_t tls_port;
+	char db_file[50];
 	char db_host[50];
 	char db_user[20];
 	char db_pass[20];
@@ -215,7 +216,7 @@ struct q2_server_s {
 	size_t addrlen;                // remove later
 	msg_buffer_t msg;              // sending
 	msg_buffer_t msg_in;            // receiving
-	MYSQL *db;                     // this server's database connection
+	//MYSQL *db;                     // this server's database connection
 	//char encryption_key[1400];     // key for decrypting msgs
 	q2_player_t players[256];
 	BIO *bio;                      // TLS buffered IO pointer
@@ -331,7 +332,7 @@ q2a_config_t config;
 
 GQueue *queue;
 bool threadrunning;
-MYSQL *db;
+sqlite3 *db;
 int sockfd, newsockfd, clsock, mgmtsock;
 pthread_t threads[MAX_THREADS];
 uint32_t thread_count;
