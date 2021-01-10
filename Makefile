@@ -19,6 +19,7 @@ HEADERS := server.h list.h
 OBJS :=	\
 		cmd.o \
 		crypto.o \
+		database.o \
 		log.o \
 		msg.o \
 		parse.o \
@@ -27,7 +28,7 @@ OBJS :=	\
 		util.o
 
 CFLAGS += $(MY_CFLAGS) $(GLIB_CFLAGS)
-LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -lcrypto
+LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -lcrypto -lsqlite3
 TARGET ?= q2admind
 	
 all: $(TARGET)
