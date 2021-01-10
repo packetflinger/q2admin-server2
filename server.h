@@ -411,6 +411,9 @@ size_t  SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len)
 size_t  SymmetricEncrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
 bool    VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg);
 
+void    OpenDatabase(void);
+void    CloseDatabase(void);
+
 // test
 void    PollServer(void);
 

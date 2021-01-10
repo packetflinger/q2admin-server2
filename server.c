@@ -23,11 +23,13 @@ void LoadConfig(char *filename)
 {
 	// problems reading file, just use default port
 	if (access(filename, F_OK) == -1) {
-		config.port = atoi(PORT);
-		return;
+	    printf("Problems loading config file '%s', aborting.\n", filename);
+	    exit(1);
+		//config.port = atoi(PORT);
+		//return;
 	}
 
-	printf("Loading config from %s\n", filename);
+	printf("Loading config from '%s'\n", filename);
 
 	g_autoptr(GError) error = NULL;
 	g_autoptr(GKeyFile) key_file = g_key_file_new ();
@@ -42,8 +44,11 @@ void LoadConfig(char *filename)
 	gchar *val;
 
 	val = g_key_file_get_string(key_file, "database", "file", &error);
-	strncpy(config.db_file, val, sizeof(config.db_file));
+	if (val) {
+	    strncpy(config.db_file, val, sizeof(config.db_file));
+	}
 
+	/*
 	val = g_key_file_get_string(key_file, "database", "host", &error);
 	strncpy(config.db_host, val, sizeof(config.db_host));
 
@@ -55,6 +60,7 @@ void LoadConfig(char *filename)
 
 	val = g_key_file_get_string(key_file, "database", "db", &error);
 	strncpy(config.db_schema, val, sizeof(config.db_schema));
+	 */
 
 	gint val2 = g_key_file_get_integer(key_file, "server", "port", &error);
 	config.port = (uint16_t) val2;
@@ -132,10 +138,10 @@ void FreeServers(q2_server_t *listhead)
 	}
 }
 
-
 /**
  * Fetch active servers from the database and load into a list
  */
+/*
 bool LoadServers()
 {
 	static MYSQL_RES *res;
@@ -200,6 +206,7 @@ bool LoadServers()
 
 	return true;
 }
+*/
 
 /**
  * Get the server entry based on the supplied key
@@ -445,10 +452,6 @@ void ERR_CloseConnection(q2_server_t *srv)
         EVP_CIPHER_CTX_free(srv->connection.e_ctx);
     }
 
-    if (srv->db) {
-        // close mysql?
-    }
-
     close(srv->socket);
     srv->connected = false;
 }
@@ -503,16 +506,21 @@ int main(int argc, char **argv)
 	LoadConfig(CONFIGFILE);
 
 	// connect to the database
-	db = mysql_init(NULL);
-	if (mysql_real_connect(db, config.db_host, config.db_user, config.db_pass, config.db_schema, 0, NULL, 0) == NULL) {
-		fprintf(stderr, "%s\n", mysql_error(db));
-		mysql_close(db);
-		exit(1);
-	}
+	//db = mysql_init(NULL);
+	//if (mysql_real_connect(db, config.db_host, config.db_user, config.db_pass, config.db_schema, 0, NULL, 0) == NULL) {
+	//	fprintf(stderr, "%s\n", mysql_error(db));
+	//	mysql_close(db);
+	//	exit(1);
+	//}
 
-	printf("Connected to database\n");
+	OpenDatabase();
 
-	LoadServers();
+	CloseDatabase();
+	return 0;
+
+	//printf("Connected to database\n");
+
+	//LoadServers();
 
 	(void)signal(SIGINT, SignalCatcher);
 

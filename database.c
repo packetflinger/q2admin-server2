@@ -201,7 +201,7 @@ void G_LogClients(void)
     db_execute("COMMIT");
 }
 */
-static const char schema[] =
+static const char schema_orig[] =
 "BEGIN TRANSACTION;\n"
 
 "CREATE TABLE IF NOT EXISTS players(\n"
@@ -248,37 +248,47 @@ static const char schema[] =
 
 "COMMIT;\n";
 
-void DB_OpenDatabase(void)
+
+
+
+static const char schema[] =
+"BEGIN TRANSACTION;\n"
+"CREATE TABLE IF NOT EXISTS server(\n"
+        "server_id INT\n"
+        "owner INT\n"
+        "serverkey TEXT\n"
+        "flags INT\n"
+        "name TEXT\n"
+        "ip TEXT\n"
+        "port INT\n"
+        "enabled INT\n"
+");\n"
+
+"CREATE INDEX IF NOT EXISTS server_idx ON server(server_id);\n"
+"COMMIT;\n";
+
+
+void OpenDatabase(void)
 {
-    char buffer[2048];
     char *err = NULL;
 
     //G_CheckFilenameVariable(g_sql_database);
 
     if (!config.db_file[0]) {
-        return;
+        strcpy(config.db_file, "server.db");
     }
 
-    //snprintf(buffer, sizeof(buffer), "%s", config.db_file);
-
-    if (sqlite3_open(buffer, &db)) {
+    if (sqlite3_open(config.db_file, &db)) {
         printf("Couldn't open SQLite database: %s\n", sqlite3_errmsg(db));
         goto fail;
     }
-
-    /*
-    if (0 && sqlite3_exec(db, "PRAGMA synchronous=OFF", NULL, NULL, &err)) {
-        printf("Couldn't make SQLite database asynchronous: %s\n", err);
-        goto fail;
-    }
-    */
 
     if (sqlite3_exec(db, schema, NULL, NULL, &err)) {
         printf("Couldn't create SQLite database schema: %s\n", err);
         goto fail;
     }
 
-    printf("Using SQLite database '%s'\n", buffer);
+    printf("Using SQLite database '%s'\n", config.db_file);
     return;
 
 fail:
@@ -290,7 +300,7 @@ fail:
     }
 }
 
-void DB_CloseDatabase(void)
+void CloseDatabase(void)
 {
     if (db) {
         printf("Closing SQLite database\n");
