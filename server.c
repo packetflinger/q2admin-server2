@@ -141,6 +141,50 @@ void FreeServers(q2_server_t *listhead)
 /**
  * Fetch active servers from the database and load into a list
  */
+
+bool LoadServers(void)
+{
+    q2_server_t *temp, *server;
+    uint32_t ret;
+    sqlite3_stmt *res;
+
+    List_Init(&q2srvlist);
+    printf("Loading servers from database...\n");
+
+    if (!db) {
+        printf("database not open\n");
+        return false;
+    }
+
+    ret = sqlite3_prepare_v2(db, "SELECT * FROM server WHERE enabled = 1", -1, &res, 0);
+    if (ret != SQLITE_OK) {
+        return false;
+    }
+
+    while ((ret = sqlite3_step(res)) == SQLITE_ROW) {
+        temp = malloc(sizeof(q2_server_t));
+        memset(temp, 0x0, sizeof(q2_server_t));
+
+        temp->id = sqlite3_column_int(res, 0);
+        temp->key = sqlite3_column_int(res, 2);
+        temp->port = sqlite3_column_int(res, 6);
+        temp->enabled = sqlite3_column_int(res, 7);
+        temp->flags = sqlite3_column_int(res, 3);
+        strncpy(temp->name, sqlite3_column_text(res, 4), sizeof(temp->name));
+        strncpy(temp->ip, sqlite3_column_text(res, 5), sizeof(temp->ip));
+
+        List_Append(&q2srvlist, &temp->entry);
+    }
+
+    sqlite3_finalize(res);
+
+    FOR_EACH_SERVER(server) {
+        printf("    - %s %s:%d\n", server->name, server->ip, server->port);
+    }
+
+    return true;
+}
+
 /*
 bool LoadServers()
 {
@@ -232,7 +276,7 @@ q2_server_t *find_server_by_name(const char *name)
 	q2_server_t *s;
 
 	FOR_EACH_SERVER(s) {
-		if (strcmp(name, s->teleportname) == 0) {
+		if (strcmp(name, s->name) == 0) {
 			return s;
 		}
 	}
@@ -318,9 +362,9 @@ void SignalCatcher(int sig)
 	// close all sockets and GTFO
 	if (sig == SIGINT) {
 		FOR_EACH_SERVER(srv) {
-			if (srv->active) {
+			//if (srv->active) {
 				close(srv->socket);
-			}
+			//}
 		}
 		close(sockfd);
 		close(newsockfd);
@@ -423,7 +467,7 @@ bool VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg)
         q2->connection.d_ctx = EVP_CIPHER_CTX_new();
         q2->trusted = true;
     } else {
-        printf("%s connected but is NOT trusted, disconnecting\n", q2->teleportname);
+        printf("%s connected but is NOT trusted, disconnecting\n", q2->name);
         return false;
     }
 
@@ -440,9 +484,11 @@ void ERR_CloseConnection(q2_server_t *srv)
         RSA_free(srv->publickey);
     }
 
+    /*
     if (srv->addr) {
         freeaddrinfo(srv->addr);
     }
+    */
 
     if (srv->connection.d_ctx) {
         EVP_CIPHER_CTX_free(srv->connection.d_ctx);
@@ -515,16 +561,17 @@ int main(int argc, char **argv)
 
 	OpenDatabase();
 
-	CloseDatabase();
-	return 0;
+
 
 	//printf("Connected to database\n");
 
-	//LoadServers();
+	LoadServers();
 
 	(void)signal(SIGINT, SignalCatcher);
 
 	PollServer();
+
+	CloseDatabase();
 
 	return EXIT_SUCCESS;
 }
@@ -574,9 +621,11 @@ void CloseConnection(q2_server_t *srv)
         RSA_free(srv->publickey);
     }
 
+    /*
     if (srv->addr) {
         freeaddrinfo(srv->addr);
     }
+    */
 
     if (srv->connection.d_ctx) {
         EVP_CIPHER_CTX_free(srv->connection.d_ctx);
@@ -588,7 +637,7 @@ void CloseConnection(q2_server_t *srv)
 
     close(srv->socket);
     srv->connected = false;
-    printf("%s disconnected\n", srv->teleportname);
+    printf("%s disconnected\n", srv->name);
     remove_server_socket();
 }
 
@@ -786,7 +835,7 @@ void PollServer(void)
 
                     if (msg.length <= 0) {
                         if (msg.length == 0) {
-                            printf("%s disconnected abnormally\n", q2->teleportname);
+                            printf("%s disconnected abnormally\n", q2->name);
                         } else {
                             perror("recv");
                         }

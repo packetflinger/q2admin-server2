@@ -206,23 +206,23 @@ struct q2_server_s {
 	uint8_t maxclients;            // 256 max in q2 protocol
 	uint32_t flags;                //
 	char name[50];
-	char teleportname[MAX_TELE_NAME];
+	//char teleportname[MAX_TELE_NAME];
 	long lastcontact;              // when did we last see this server?
 	bool enabled;                  // owner wants it used
-	bool authorized;               // confirmed legit and can be used
-	bool active;                   // server is online now
-	int sockfd;                    // dedicated socket for rcon commands
-	struct addrinfo *addr;         //
-	size_t addrlen;                // remove later
+	//bool authorized;               // confirmed legit and can be used
+	//bool active;                   // server is online now
+	//int sockfd;                    // dedicated socket for rcon commands
+	//struct addrinfo *addr;         //
+	//size_t addrlen;                // remove later
 	msg_buffer_t msg;              // sending
 	msg_buffer_t msg_in;            // receiving
 	//MYSQL *db;                     // this server's database connection
 	//char encryption_key[1400];     // key for decrypting msgs
 	q2_player_t players[256];
-	BIO *bio;                      // TLS buffered IO pointer
+	//BIO *bio;                      // TLS buffered IO pointer
 	bool trusted;                  // auth'd, identity confirmed
-	char public_key[600];
-	bool tls;                      // is this server connection encrypted?
+	//char public_key[600];
+	//bool tls;                      // is this server connection encrypted?
 	RSA *publickey;
 	list_t entry;
 };

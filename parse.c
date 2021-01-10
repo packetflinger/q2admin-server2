@@ -155,7 +155,7 @@ void ParseInvite(q2_server_t *srv, msg_buffer_t *in)
 		strncpy(message,
 			va("%s invites you to play on %s: %s",
 					srv->players[client_id].name,
-					srv->teleportname,
+					srv->name,
 					text
 			),
 			sizeof(message)
@@ -164,7 +164,7 @@ void ParseInvite(q2_server_t *srv, msg_buffer_t *in)
 		strncpy(message,
 			va("You are cordially invited to join %s playing on %s",
 					srv->players[client_id].name,
-					srv->teleportname
+					srv->name
 			),
 			sizeof(message)
 		);
@@ -232,7 +232,7 @@ void ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in)
 {
 	uint8_t client_id = MSG_ReadByte(in);
 
-	printf("%d disconnected from %s\n", client_id, srv->teleportname);
+	printf("%d disconnected from %s\n", client_id, srv->name);
 
 	memset(&srv->players[client_id], 0, sizeof(q2_player_t));
 	srv->playercount--;
@@ -281,7 +281,7 @@ void ParseAuth(q2_server_t *q2, msg_buffer_t *in)
         //ERR_CloseConnection(q2);
     }
 
-    printf("%s is trusted\n", q2->teleportname);
+    printf("%s is trusted\n", q2->name);
     MSG_WriteByte(SCMD_TRUSTED, &q2->msg);
     SendBuffer(q2);
 }
