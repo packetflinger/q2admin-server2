@@ -2,13 +2,14 @@
 
 
 /**
- *
+ * Called for each packet from the q2a server
  */
 void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
 {
     uint8_t cmd;
     msg_buffer_t e;
 
+    // decrypt if necessary
     if (q2->connection.encrypted) {
         memset(&e, 0, sizeof(msg_buffer_t));
         e.length = SymmetricDecrypt(q2, e.data, msg->data, msg->length);
@@ -54,11 +55,10 @@ void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
         case CMD_MAP:
             ParseMap(q2, msg);
             break;
-        //default:
-            //printf("cmd: %d\n", cmd);
         }
     }
 }
+
 
 /**
  * Parse the first message sent from the client
@@ -72,6 +72,7 @@ void ParseHello(hello_t *h, msg_buffer_t *in)
     h->encrypted = MSG_ReadByte(in);
     MSG_ReadData(in, h->challenge, CHALLENGE_LEN);
 }
+
 
 /**
  * Parse in incoming PRINT message.
@@ -96,14 +97,14 @@ void ParsePrint(q2_server_t *srv, msg_buffer_t *in)
     }
 }
 
+
 /**
  * Parse a command.
  * This would be player-initiated commands like to teleport or invite
  */
 void ParseCommand(q2_server_t *srv, msg_buffer_t *in)
 {
-    switch(MSG_ReadByte(in))
-    {
+    switch(MSG_ReadByte(in)) {
     case CMD_COMMAND_TELEPORT:
         ParseTeleport(srv, in);
         break;
@@ -116,6 +117,12 @@ void ParseCommand(q2_server_t *srv, msg_buffer_t *in)
     }
 }
 
+
+/**
+ * A client issued the teleport command
+ * - if no argument (target) is given, just display the options available
+ * - If target is supplied, stuff a connect message to send them there
+ */
 void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 {
     uint8_t client_id;
@@ -125,7 +132,6 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 
     client_id = MSG_ReadByte(in);
     location = MSG_ReadString(in);
-
 
     // player just issued teleport command with no arg, show available servers
     if (!*location) {
@@ -157,6 +163,7 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 
     SendBuffer(srv);
 }
+
 
 /**
  * A client issued an invite command
@@ -203,11 +210,19 @@ void ParseInvite(q2_server_t *srv, msg_buffer_t *in)
     }
 }
 
+
+/**
+ * A client issued the whois command
+ */
 void ParseWhois(q2_server_t *srv, msg_buffer_t *in)
 {
 
 }
 
+
+/**
+ * A player connected
+ */
 void ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in)
 {
     uint8_t client_id;
@@ -230,6 +245,10 @@ void ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in)
     srv->playercount++;
 }
 
+
+/**
+ * A player changed their userinfo string (changed name, skin, hand, fov, etc)
+ */
 void ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in)
 {
     uint8_t client_id;
@@ -250,6 +269,10 @@ void ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in)
     strncpy(p->userinfo, userinfo, sizeof(p->userinfo));
 }
 
+
+/**
+ * Player disconnected
+ */
 void ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in)
 {
     uint8_t client_id = MSG_ReadByte(in);
@@ -260,6 +283,10 @@ void ParsePlayerDisconnect(q2_server_t *srv, msg_buffer_t *in)
     srv->playercount--;
 }
 
+
+/**
+ * Map changed on the server
+ */
 void ParseMap(q2_server_t *srv, msg_buffer_t *in)
 {
     char *map;
@@ -268,6 +295,10 @@ void ParseMap(q2_server_t *srv, msg_buffer_t *in)
     strncpy(srv->map, map, sizeof(srv->map));
 }
 
+
+/**
+ * Get a list of currently connected players
+ */
 void ParsePlayerList(q2_server_t *srv, msg_buffer_t *in)
 {
     uint8_t i, client_id;
@@ -291,6 +322,10 @@ void ParsePlayerList(q2_server_t *srv, msg_buffer_t *in)
     }
 }
 
+
+/**
+ * Check the encrypted nonce.
+ */
 void ParseAuth(q2_server_t *q2, msg_buffer_t *in)
 {
     if (!VerifyClientChallenge(q2, in)) {
