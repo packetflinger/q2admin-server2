@@ -127,6 +127,16 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 	location = MSG_ReadString(in);
 
 
+	// player just issued teleport command with no arg, show available servers
+	if (!*location) {
+	    MSG_WriteByte(SCMD_SAYCLIENT, &srv->msg);
+        MSG_WriteByte(client_id, &srv->msg);
+        MSG_WriteByte(PRINT_HIGH, &srv->msg);
+        MSG_WriteString("Todo: show available servers\n", &srv->msg);
+        SendBuffer(srv);
+	    return;
+	}
+
     FOR_EACH_SERVER(server) {
         if (strcmp(server->name, location) == 0) {
             found = server;
