@@ -303,7 +303,7 @@ fail:
 void CloseDatabase(void)
 {
     if (db) {
-        printf("Closing SQLite database\n");
+        printf("\nClosing SQLite database\n");
         sqlite3_close(db);
         db = NULL;
     }
