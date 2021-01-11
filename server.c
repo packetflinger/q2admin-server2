@@ -853,6 +853,7 @@ void PollServer(void)
                             if (!q2) {
                                 printf("Invalid client, closing connection\n");
                                 close(sockets[i].fd);
+                                remove_server_socket();
                                 continue;
                             }
                         }
