@@ -335,7 +335,7 @@ void ParseAuth(q2_server_t *q2, msg_buffer_t *in)
         MSG_WriteString("Client authentication failed", &q2->msg);
         SendBuffer(q2);
 
-        //ERR_CloseConnection(q2);
+        CloseConnection(q2);
     }
 
     printf("%s is trusted\n", q2->name);
