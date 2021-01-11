@@ -2,19 +2,11 @@
 #include "server.h"
 
 LIST_DECL(q2srvlist);
-LIST_DECL(connlist);
 
 struct pollfd *sockets;
 uint32_t socket_size = 0;
 uint32_t socket_count = 0;
 
-/**
- * Print out an error message and quit
- */
-static void die(const char *msg) {
-	printf("Error: %s\n", msg);
-	exit(EXIT_FAILURE);
-}
 
 /**
  * Loads config from file. Uses glib2's ini parsing stuff
@@ -24,9 +16,7 @@ void LoadConfig(char *filename)
 	// problems reading file, just use default port
 	if (access(filename, F_OK) == -1) {
 	    printf("Problems loading config file '%s', aborting.\n", filename);
-	    exit(1);
-		//config.port = atoi(PORT);
-		//return;
+	    exit(EXIT_FAILURE);
 	}
 
 	printf("Loading config from '%s'\n", filename);
@@ -48,31 +38,8 @@ void LoadConfig(char *filename)
 	    strncpy(config.db_file, val, sizeof(config.db_file));
 	}
 
-	/*
-	val = g_key_file_get_string(key_file, "database", "host", &error);
-	strncpy(config.db_host, val, sizeof(config.db_host));
-
-	val = g_key_file_get_string(key_file, "database", "user", &error);
-	strncpy(config.db_user, val, sizeof(config.db_user));
-
-	val = g_key_file_get_string(key_file, "database", "password", &error);
-	strncpy(config.db_pass, val, sizeof(config.db_pass));
-
-	val = g_key_file_get_string(key_file, "database", "db", &error);
-	strncpy(config.db_schema, val, sizeof(config.db_schema));
-	 */
-
 	gint val2 = g_key_file_get_integer(key_file, "server", "port", &error);
 	config.port = (uint16_t) val2;
-
-	gint val3 = g_key_file_get_integer(key_file, "server", "client_port", &error);
-	config.client_port = (uint16_t) val3;
-
-	gint val4 = g_key_file_get_integer(key_file, "server", "tls_port", &error);
-	config.tls_port = (uint16_t) val4;
-
-	val = g_key_file_get_string(key_file, "crypto", "certificate", &error);
-	strncpy(config.certificate, val, sizeof(config.certificate));
 
 	val = g_key_file_get_string(key_file, "crypto", "private_key", &error);
 	strncpy(config.private_key, val, sizeof(config.private_key));
@@ -83,30 +50,6 @@ void LoadConfig(char *filename)
 	g_free(val);
 }
 
-/**
- * MySQL test function
- */
-/*
-char *getNow(MYSQL *m)
-{
-	static MYSQL_RES *res;
-	static MYSQL_ROW r;
-
-	if (mysql_query(m, "SELECT NOW() AS now")) {
-		fprintf(stderr, "%s\n", mysql_error(m));
-		mysql_close(m);
-		exit(1);
-	}
-
-	res = mysql_store_result(m);
-
-	while ((r = mysql_fetch_row(res))) {
-		return r[0];
-	}
-
-	return "";
-}
-*/
 
 /**
  * Variable assignment, just makes building strings easier
@@ -336,44 +279,6 @@ char *Info_ValueForKey(char *s, char *key)
 }
 
 
-/**
- * As clients disconnect, new connections use their threadId.
- * Keeps them contiguous
- */
-uint32_t find_available_thread_slot(void)
-{
-	uint32_t i;
-
-	for (i = 0; i < MAX_THREADS; i++) {
-		// if that thread is null, let's use the space
-		if (!threads[i]) {
-			return i;
-		}
-	}
-
-	// getting here means we're full, no more threads allowed
-	return -1;
-}
-
-void SignalCatcher(int sig)
-{
-	q2_server_t *srv;
-
-	// close all sockets and GTFO
-	if (sig == SIGINT) {
-		FOR_EACH_SERVER(srv) {
-			//if (srv->active) {
-				close(srv->socket);
-			//}
-		}
-		close(sockfd);
-		close(newsockfd);
-		close(mgmtsock);
-		close(clsock);
-
-		exit(1);
-	}
-}
 
 void LoadClientPublicKey(q2_server_t *q2)
 {
@@ -532,48 +437,6 @@ void SendBuffer(q2_server_t *srv)
 	memset(&srv->msg, 0, sizeof(msg_buffer_t));
 
 	return;
-}
-
-
-
-
-/**
- * Entry point
- */
-int main(int argc, char **argv)
-{
-	threadrunning = false;
-
-	memset(&threads, 0, sizeof(pthread_t) * MAX_THREADS);
-
-	List_Init(&connlist);
-
-	// load the config
-	LoadConfig(CONFIGFILE);
-
-	// connect to the database
-	//db = mysql_init(NULL);
-	//if (mysql_real_connect(db, config.db_host, config.db_user, config.db_pass, config.db_schema, 0, NULL, 0) == NULL) {
-	//	fprintf(stderr, "%s\n", mysql_error(db));
-	//	mysql_close(db);
-	//	exit(1);
-	//}
-
-	OpenDatabase();
-
-
-
-	//printf("Connected to database\n");
-
-	LoadServers();
-
-	(void)signal(SIGINT, SignalCatcher);
-
-	PollServer();
-
-	CloseDatabase();
-
-	return EXIT_SUCCESS;
 }
 
 
@@ -768,7 +631,7 @@ static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
 /**
  *
  */
-void PollServer(void)
+void RunServer(void)
 {
     uint32_t listener;
     uint32_t newsocket;
@@ -780,19 +643,19 @@ void PollServer(void)
 
     struct sockaddr_storage remoteaddr;
     socklen_t addrlen;
-
     char remote_addr[INET6_ADDRSTRLEN];
 
     FOR_EACH_SERVER(q2) {
         socket_size++;
     }
 
+    // add 5 or so extra for temporary peer connections
     sockets = malloc(socket_size * sizeof(struct pollfd) + 5);
 
     listener = get_listener_socket();
     if (listener == -1) {
-        fprintf(stderr, "error getting listening socket\n");
-        exit(1);
+        fprintf(stderr, "[error] problems getting listening socket\n");
+        exit(EXIT_FAILURE);
     }
 
     sockets[0].fd = listener;
@@ -802,8 +665,8 @@ void PollServer(void)
     while (true) {
         poll_count = poll(sockets, socket_count, -1);   // block
         if (poll_count == -1) {
-            perror("poll");
-            exit(1);
+            perror("[error] poll");
+            exit(EXIT_FAILURE);
         }
 
         for (int i=0; i<socket_count; i++) {
@@ -835,9 +698,9 @@ void PollServer(void)
 
                     if (msg.length <= 0) {
                         if (msg.length == 0) {
-                            printf("%s disconnected abnormally\n", q2->name);
+                            printf("[warn] %s disconnected abnormally\n", q2->name);
                         } else {
-                            perror("recv");
+                            perror("[error[ recv");
                         }
 
                         q2->connected = false;
@@ -851,7 +714,7 @@ void PollServer(void)
 
                             // not a real client, hang up and move on
                             if (!q2) {
-                                printf("Invalid client, closing connection\n");
+                                printf("[warn] Invalid client, closing connection\n");
                                 close(sockets[i].fd);
                                 remove_server_socket();
                                 continue;
@@ -866,3 +729,40 @@ void PollServer(void)
     }
 }
 
+/**
+ * Catch things like ctrl+c to close open handles
+ */
+void SignalCatcher(int sig)
+{
+	uint8_t i;
+	q2_server_t *srv;
+
+	// close all sockets and GTFO
+	if (sig == SIGINT) {
+
+		for (i=0; i<socket_count; i++) {
+			if (sockets[i].fd) {
+				close(sockets[i].fd);
+			}
+		}
+
+		CloseDatabase();
+		exit(EXIT_SUCCESS);
+	}
+}
+
+
+/**
+ * Entry point
+ */
+int main(int argc, char **argv)
+{
+	signal(SIGINT, SignalCatcher);
+
+	LoadConfig(CONFIGFILE);
+	OpenDatabase();
+	LoadServers();
+	RunServer();
+
+	return EXIT_SUCCESS;
+}

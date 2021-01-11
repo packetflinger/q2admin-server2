@@ -139,15 +139,6 @@ typedef struct {
 	uint32_t invite_frame;      // throttle invite cmd to this frame
 } q2_player_t;
 
-/**
- *
- */
-//typedef struct {
-//	SSL        *connection;
-//	SSL_CTX    *context;
-//	SSL_METHOD *method;
-//} ssl_connection_t;
-
 
 /**
  * This represents a new q2 server connection,
@@ -171,6 +162,7 @@ typedef struct {
 	list_t             entry;
 } connection_t;
 
+
 /**
  * Hello is the first message sent by a client. It contains all
  * the necessary info to register with the server.
@@ -183,6 +175,7 @@ typedef struct {
 	uint8_t            encrypted;                // is this connection encrypted?
 	byte               challenge[CHALLENGE_LEN]; // random data to auth the server
 } hello_t;
+
 
 /**
  * Represents a server record in the database. For speed sake, these records are
@@ -215,6 +208,7 @@ struct q2_server_s {
 };
 
 typedef struct q2_server_s q2_server_t;
+
 
 /**
  * Means of death.
@@ -266,6 +260,7 @@ typedef enum {
 	CMD_AUTH
 } ra_client_cmd_t;
 
+
 /**
  * Server to client commands
  */
@@ -290,6 +285,7 @@ typedef enum {
 	CMD_COMMAND_INVITE,
 	CMD_COMMAND_WHOIS
 } remote_cmd_command_t;
+
 
 /**
  * Print levels
@@ -316,17 +312,9 @@ typedef enum {
 
 
 q2a_config_t config;
-
-GQueue *queue;
-bool threadrunning;
 sqlite3 *db;
-int sockfd, newsockfd, clsock, mgmtsock;
-pthread_t threads[MAX_THREADS];
-uint32_t thread_count;
-
-extern bool threadrunning;
 extern list_t q2srvlist;
-extern list_t connlist;
+
 
 void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
 uint8_t   MSG_ReadByte(msg_buffer_t *msg);
