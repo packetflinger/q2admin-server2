@@ -121,17 +121,29 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
 	uint8_t client_id;
 	char *location;
 	char *reply;
+	q2_server_t *server, *found = 0;
 
 	client_id = MSG_ReadByte(in);
 	location = MSG_ReadString(in);
 
+
+    FOR_EACH_SERVER(server) {
+        if (strcmp(server->name, location) == 0) {
+            found = server;
+        }
+    }
+
 	// do stuff
-	reply = va("client %d just used teleport command\n", client_id);
+	reply = va("sending you to %s:%d\n", found->ip, found->port);
+	char *stuff = va("sv !stuff CL %d connect %s:%d", client_id, found->ip, found->port);
 
 	MSG_WriteByte(SCMD_SAYCLIENT, &srv->msg);
 	MSG_WriteByte(client_id, &srv->msg);
 	MSG_WriteByte(PRINT_HIGH, &srv->msg);
 	MSG_WriteString(reply, &srv->msg);
+
+	MSG_WriteByte(SCMD_COMMAND, &srv->msg);
+	MSG_WriteString(stuff, &srv->msg);
 
 	SendBuffer(srv);
 }
