@@ -384,6 +384,7 @@ void        OpenDatabase(void);
 void        CloseDatabase(void);
 
 // util.c
+void        hexDump (char *desc, void *addr, int len);
 char        *Info_ValueForKey(char *s, char *key);
 void        SendError(q2_server_t *server, ra_error_t error, uint8_t id, const char *msg);
 void        SignalCatcher(int sig);
