@@ -23,6 +23,7 @@ OBJS :=	\
 		log.o \
 		msg.o \
 		parse.o \
+		peer.o \
 		server.o \
 		teleport.o \
 		threadpool.o \

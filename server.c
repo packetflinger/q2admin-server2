@@ -481,6 +481,7 @@ void RunServer(void)
 {
     uint32_t listener;
     uint32_t newsocket;
+    uint32_t peer;
 
     q2_server_t *q2;
     msg_buffer_t msg;
@@ -558,6 +559,12 @@ void RunServer(void)
 
                     } else {
                         if (!q2) {
+                            peer = MSG_ReadLong(&msg);
+                            if (peer == 0) {
+                                ParsePeerRequest(&msg, i);
+                                continue;
+                            }
+
                             q2 = new_server(&msg, i);
 
                             // not a real client, hang up and move on

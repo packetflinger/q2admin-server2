@@ -249,6 +249,21 @@ void ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in)
 
 
 /**
+ *
+ */
+void ParsePeerRequest(msg_buffer_t *in, uint32_t index)
+{
+    uint32_t peerreq;
+
+    switch (MSG_ReadByte(in)) {
+    case PEER_GETSERVERS:
+        P_GetServerList();
+        break;
+    }
+}
+
+
+/**
  * A player changed their userinfo string (changed name, skin, hand, fov, etc)
  */
 void ParsePlayerUpdate(q2_server_t *srv, msg_buffer_t *in)

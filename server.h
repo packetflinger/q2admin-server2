@@ -305,6 +305,9 @@ typedef enum {
     ERR_ENCRYPTION,         // some encryption error
 } ra_error_t;
 
+typedef enum {
+    PEER_GETSERVERS,
+} peer_request_t;
 
 q2a_config_t config;
 sqlite3 *db;
@@ -363,6 +366,7 @@ void        ParseMap(q2_server_t *srv, msg_buffer_t *in);
 void        ParsePlayerList(q2_server_t *srv, msg_buffer_t *in);
 void        ParseHello(hello_t *h, msg_buffer_t *in);
 void        ParseAuth(q2_server_t *q2, msg_buffer_t *in);
+void        ParsePeerRequest(msg_buffer_t *in, uint32_t index);
 
 void        *ClientThread(void *arg);
 void        CL_HandleInput(gchar **in);
@@ -392,5 +396,6 @@ void        SignalCatcher(int sig);
 void        TestThreading(void *arg);
 char        *va(const char *format, ...);
 
-
+// peer.c
+void        P_GetServerList(void);
 #endif
