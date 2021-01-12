@@ -94,6 +94,17 @@ void SignalCatcher(int sig)
     }
 }
 
+/**
+ * Just for testing threading
+ */
+void TestThreading(void *arg)
+{
+    int i = 0;
+    while (i++ < 15) {
+        printf("%s %d\n", (char *)arg, i);
+        sleep(2);
+    }
+}
 
 /**
  * Variable assignment, just makes building strings easier

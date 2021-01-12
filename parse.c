@@ -243,6 +243,8 @@ void ParsePlayerConnect(q2_server_t *srv, msg_buffer_t *in)
     strncpy(p->userinfo, userinfo, sizeof(p->userinfo));
 
     srv->playercount++;
+
+    thpool_add_work(pool, TestThreading, "thread1");
 }
 
 

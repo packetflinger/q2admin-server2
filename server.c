@@ -3,6 +3,8 @@
 
 LIST_DECL(q2srvlist);
 
+threadpool pool;
+
 struct pollfd *sockets;
 uint32_t socket_size = 0;
 uint32_t socket_count = 0;
@@ -491,6 +493,8 @@ void RunServer(void)
     struct sockaddr_storage remoteaddr;
     socklen_t addrlen;
     char remote_addr[INET6_ADDRSTRLEN];
+
+    pool = thpool_init(2);
 
     FOR_EACH_SERVER(q2) {
         socket_size++;

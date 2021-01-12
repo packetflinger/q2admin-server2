@@ -317,6 +317,7 @@ extern list_t q2srvlist;
 extern struct pollfd *sockets;
 extern uint32_t socket_size;
 extern uint32_t socket_count;
+extern threadpool pool;
 
 void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
 uint8_t   MSG_ReadByte(msg_buffer_t *msg);
@@ -394,6 +395,7 @@ void    CloseDatabase(void);
 
 // util.c
 void SignalCatcher(int sig);
+void TestThreading(void *arg);
 char *va(const char *format, ...);
 
 // test
