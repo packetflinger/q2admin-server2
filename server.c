@@ -511,7 +511,7 @@ void RunServer(void)
     socket_count = 1;
 
     while (true) {
-        poll_count = poll(sockets, socket_count, -1);   // block
+        poll_count = poll(sockets, socket_count, POLL_BLOCK);
         if (poll_count == -1) {
             perror("[error] poll");
             exit(EXIT_FAILURE);

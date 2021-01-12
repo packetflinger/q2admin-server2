@@ -56,6 +56,7 @@
 #define MAXLINE     1390
 #define CONFIGFILE  "q2a.ini"
 #define VER_REQ     0
+#define POLL_BLOCK  (-1)
 
 #define RSA_BITS        2048   // encryption key length
 #define CHALLENGE_LEN   16     // bytes
