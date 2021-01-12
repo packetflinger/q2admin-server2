@@ -299,8 +299,9 @@ typedef enum {
 typedef enum {
     ERR_INVITEQUOTA = 100,
     ERR_TELEPORTQUOTA,
-    ERR_UNAUTHORIZED = 200,    // server key mismatch
-    ERR_ENCRYPTION,
+    ERR_UNAUTHORIZED = 200, // server key mismatch
+    ERR_OLDVERSION,         // more recent version required
+    ERR_ENCRYPTION,         // some encryption error
 } ra_error_t;
 
 
