@@ -30,18 +30,17 @@
 #include <openssl/rand.h>
 #include <openssl/pem.h>
 
-// #include <mysql/mysql.h>
 #include <glib.h>
 #include <sqlite3.h>
 
 #include <stdbool.h>
-#include <pthread.h>
 
 #include <errno.h>
 #include <signal.h>
 #include <poll.h>
 
 #include "list.h"
+#include "threadpool.h"
 
 #if __GNUC__ >= 4
 #define q_offsetof(t, m)    __builtin_offsetof(t, m)
@@ -49,8 +48,9 @@
 #define q_offsetof(t, m)    ((size_t)&((t *)0)->m)
 #endif
 
-#define random()                       ((rand () & 0x7fff) / ((float)0x7fff))
-#define ROUNDF(f,c) (((float)((int)((f) * (c))) / (c)))
+#define clamp(a,b,c)    ((a)<(b)?(a)=(b):(a)>(c)?(a)=(c):(a))
+#define random()        ((rand () & 0x7fff) / ((float)0x7fff))
+#define ROUNDF(f,c)     (((float)((int)((f) * (c))) / (c)))
 
 #define PORT		"9988"
 #define MAXLINE 	1390

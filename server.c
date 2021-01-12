@@ -547,7 +547,7 @@ void RunServer(void)
                         if (msg.length == 0) {
                             printf("[warn] %s disconnected abnormally\n", q2->name);
                         } else {
-                            perror("[error[ recv");
+                            perror("[error] recv");
                         }
 
                         q2->connected = false;

@@ -1,8 +1,5 @@
 -include .config
 
-MY_CFLAGS = $(shell mysql_config --cflags)
-MY_LDFLAGS = $(shell mysql_config --libs)
-
 GLIB_CFLAGS = $(shell pkg-config --cflags glib-2.0)
 GLIB_LDFLAGS = $(shell pkg-config --libs glib-2.0)
 
@@ -14,7 +11,10 @@ WINDRES ?= windres
 
 CFLAGS ?= -g --std=c99 -D_POSIX_C_SOURCE=200112L -I/usr/local/jannson/include
 
-HEADERS := server.h list.h
+HEADERS := \
+		server.h \
+		list.h \
+		threadpool.h 
 
 OBJS :=	\
 		cmd.o \
@@ -25,10 +25,11 @@ OBJS :=	\
 		parse.o \
 		server.o \
 		teleport.o \
+		threadpool.o \
 		util.o
 
-CFLAGS += $(MY_CFLAGS) $(GLIB_CFLAGS)
-LDFLAGS += $(MY_LDFLAGS) $(GLIB_LDFLAGS) -lcrypto -lsqlite3
+CFLAGS += $(GLIB_CFLAGS)
+LDFLAGS += $(GLIB_LDFLAGS) -lcrypto -lsqlite3 -lpthread
 TARGET ?= q2admind
 	
 all: $(TARGET)
