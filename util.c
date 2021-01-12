@@ -1,6 +1,49 @@
 #include "server.h"
 
 /**
+ * Pick out a value for a given key in the userinfo string
+ */
+char *Info_ValueForKey(char *s, char *key)
+{
+    char pkey[512];
+    static char value[2][512]; // use two buffers so compares
+    // work without stomping on each other
+    static int valueindex;
+    char *o;
+
+    valueindex ^= 1;
+    if (*s == '\\')
+        s++;
+    while (1) {
+        o = pkey;
+        while (*s != '\\') {
+            if (!*s)
+                return "";
+            *o++ = *s++;
+        }
+        *o = 0;
+        s++;
+
+        o = value[valueindex];
+
+        while (*s != '\\' && *s) {
+            if (!*s)
+                return "";
+            *o++ = *s++;
+        }
+        *o = 0;
+
+        if (!strcmp(key, pkey))
+            return value[valueindex];
+
+        if (!*s)
+            return "";
+        s++;
+    }
+}
+
+
+/**
  *
  */
 float P_KillDeathRatio(q2_player_t *p)
@@ -26,4 +69,47 @@ void printdata(byte *data, int size)
 	    printf("%02X", data[i]);
 	}
 	printf("\n");
+}
+
+
+/**
+ * Catch things like ctrl+c to close open handles
+ */
+void SignalCatcher(int sig)
+{
+    uint8_t i;
+    q2_server_t *srv;
+
+    // close all sockets and GTFO
+    if (sig == SIGINT) {
+
+        for (i=0; i<socket_count; i++) {
+            if (sockets[i].fd) {
+                close(sockets[i].fd);
+            }
+        }
+
+        CloseDatabase();
+        exit(EXIT_SUCCESS);
+    }
+}
+
+
+/**
+ * Variable assignment, just makes building strings easier
+ */
+char *va(const char *format, ...)
+{
+    static char strings[8][MAX_STRING_CHARS];
+    static uint16_t index;
+
+    char *string = strings[index++ % 8];
+
+    va_list args;
+
+    va_start(args, format);
+    vsnprintf(string, MAX_STRING_CHARS, format, args);
+    va_end(args);
+
+    return string;
 }

@@ -314,7 +314,9 @@ typedef enum {
 q2a_config_t config;
 sqlite3 *db;
 extern list_t q2srvlist;
-
+extern struct pollfd *sockets;
+extern uint32_t socket_size;
+extern uint32_t socket_count;
 
 void      MSG_ReadData(msg_buffer_t *msg, void *out, size_t len);
 uint8_t   MSG_ReadByte(msg_buffer_t *msg);
@@ -386,8 +388,13 @@ size_t  SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len)
 size_t  SymmetricEncrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len);
 bool    VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg);
 
+// database.c
 void    OpenDatabase(void);
 void    CloseDatabase(void);
+
+// util.c
+void SignalCatcher(int sig);
+char *va(const char *format, ...);
 
 // test
 void    PollServer(void);

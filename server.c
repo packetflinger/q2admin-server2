@@ -52,24 +52,6 @@ void LoadConfig(char *filename)
 
 
 /**
- * Variable assignment, just makes building strings easier
- */
-char *va(const char *format, ...) {
-	static char strings[8][MAX_STRING_CHARS];
-	static uint16_t index;
-
-	char *string = strings[index++ % 8];
-
-	va_list args;
-
-	va_start(args, format);
-	vsnprintf(string, MAX_STRING_CHARS, format, args);
-	va_end(args);
-
-	return string;
-}
-
-/**
  * Free memory used by the servers linked-list. Called when list is updated
  */
 void FreeServers(q2_server_t *listhead)
@@ -82,7 +64,7 @@ void FreeServers(q2_server_t *listhead)
 }
 
 /**
- * Fetch active servers from the database and load into a list
+ * Fetch enabled servers from the database and load into a list
  */
 
 bool LoadServers(void)
@@ -95,7 +77,7 @@ bool LoadServers(void)
     printf("Loading servers from database...\n");
 
     if (!db) {
-        printf("database not open\n");
+        printf("[warn] database not open\n");
         return false;
     }
 
@@ -122,78 +104,12 @@ bool LoadServers(void)
     sqlite3_finalize(res);
 
     FOR_EACH_SERVER(server) {
-        printf("    - %s %s:%d\n", server->name, server->ip, server->port);
+        printf("- %s %s:%d\n", server->name, server->ip, server->port);
     }
 
     return true;
 }
 
-/*
-bool LoadServers()
-{
-	static MYSQL_RES *res;
-	static MYSQL_ROW r;
-	q2_server_t *temp, *server;
-	uint32_t err;
-	struct addrinfo hints;
-	char strport[7];
-
-	List_Init(&q2srvlist);
-
-	printf("  * Loading servers from database *\n");
-
-	if (mysql_query(db, "SELECT *, inet_ntoa(addr) AS ip FROM server WHERE enabled = 1")) {
-		printf("%s\n", mysql_error(db));
-		return false;
-	}
-
-	res = mysql_store_result(db);
-
-	while ((r = mysql_fetch_row(res))) {
-
-		temp = malloc(sizeof(q2_server_t));
-		memset(temp, 0x0, sizeof(q2_server_t));
-
-		temp->id = atoi(r[0]);
-		temp->key = atoi(r[3]);
-		temp->port = atoi(r[5]);
-		strncpy(temp->password, r[5], sizeof(temp->password));
-		temp->maxclients = atoi(r[7]);
-		temp->enabled = atoi(r[8]);
-		temp->authorized = atoi(r[9]);
-		temp->flags = atoi(r[11]);
-		strncpy(temp->name, r[12], sizeof(temp->name));
-		strncpy(temp->teleportname, r[13], sizeof(temp->teleportname));
-		temp->lastcontact = atoi(r[16]);
-		strncpy(temp->map, r[17], sizeof(temp->map));
-		strncpy(temp->public_key, r[19], sizeof(temp->public_key));
-		strncpy(temp->ip, r[20], sizeof(temp->ip));
-
-		memset(&hints, 0, sizeof(hints));
-		sprintf(strport, "%d", temp->port);
-
-		err = getaddrinfo(temp->ip, strport, &hints, &temp->addr);
-		temp->sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-
-		temp->db = mysql_init(NULL);
-		if (mysql_real_connect(temp->db, config.db_host, config.db_user, config.db_pass, config.db_schema, 0, NULL, 0) == NULL) {
-			printf("%s database connection error: %s\n", temp->teleportname, mysql_error(temp->db));
-			mysql_close(temp->db);
-
-			continue;
-		}
-
-		List_Append(&q2srvlist, &temp->entry);
-
-	}
-
-	FOR_EACH_SERVER(server) {
-		printf("    - %s (%s) %s:%d\n", server->name, server->teleportname, server->ip, server->port);
-	}
-
-	return true;
-}
-*/
 
 /**
  * Get the server entry based on the supplied key
@@ -236,50 +152,11 @@ void Pong(q2_server_t *srv)
 	SendBuffer(srv);
 }
 
+
 /**
- * Pick out a value for a givin key in the userinfo string
+ * When a client connects, load their public key into memory for
+ * decrypting their auth challenge and encrypting their symmetric key/IV
  */
-char *Info_ValueForKey(char *s, char *key)
-{
-    char pkey[512];
-    static char value[2][512]; // use two buffers so compares
-    // work without stomping on each other
-    static int valueindex;
-    char *o;
-
-    valueindex ^= 1;
-    if (*s == '\\')
-        s++;
-    while (1) {
-        o = pkey;
-        while (*s != '\\') {
-            if (!*s)
-                return "";
-            *o++ = *s++;
-        }
-        *o = 0;
-        s++;
-
-        o = value[valueindex];
-
-        while (*s != '\\' && *s) {
-            if (!*s)
-                return "";
-            *o++ = *s++;
-        }
-        *o = 0;
-
-        if (!strcmp(key, pkey))
-            return value[valueindex];
-
-        if (!*s)
-            return "";
-        s++;
-    }
-}
-
-
-
 void LoadClientPublicKey(q2_server_t *q2)
 {
     FILE *fp;
@@ -297,6 +174,7 @@ void LoadClientPublicKey(q2_server_t *q2)
 
     fclose(fp);
 }
+
 
 /**
  * A client sent us a challenge. Encrypt it and send it back along with
@@ -344,7 +222,9 @@ bool ServerAuthResponse(q2_server_t *q2, byte *challenge)
     return true;
 }
 
-
+/**
+ * Decrypt the nonce the client returned to us. If it matches the client is trusted
+ */
 bool VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg)
 {
     size_t len;
@@ -372,41 +252,12 @@ bool VerifyClientChallenge(q2_server_t *q2, msg_buffer_t *msg)
         q2->connection.d_ctx = EVP_CIPHER_CTX_new();
         q2->trusted = true;
     } else {
-        printf("%s connected but is NOT trusted, disconnecting\n", q2->name);
+        printf("[error] %s connected but is NOT trusted, disconnecting\n", q2->name);
         return false;
     }
 
     return true;
 }
-
-/**
- * Something went wrong like auth decryption failing, disconnect the client
- * and free all resources allocated to them
- */
-void ERR_CloseConnection(q2_server_t *srv)
-{
-    if (srv->publickey) {
-        RSA_free(srv->publickey);
-    }
-
-    /*
-    if (srv->addr) {
-        freeaddrinfo(srv->addr);
-    }
-    */
-
-    if (srv->connection.d_ctx) {
-        EVP_CIPHER_CTX_free(srv->connection.d_ctx);
-    }
-
-    if (srv->connection.e_ctx) {
-        EVP_CIPHER_CTX_free(srv->connection.e_ctx);
-    }
-
-    close(srv->socket);
-    srv->connected = false;
-}
-
 
 
 /**
@@ -425,6 +276,7 @@ void SendBuffer(q2_server_t *srv)
 		return;
 	}
 
+	// encrypt if we should
 	if (srv->connection.encrypted && srv->trusted) {
 	    len = SymmetricEncrypt(srv, buffer, srv->msg.data, srv->msg.length);
 	    memset(&srv->msg, 0, sizeof(msg_buffer_t));
@@ -476,19 +328,13 @@ void remove_server_socket()
 
 
 /**
- *
+ * Close the connection to the client and free any resources it consumed
  */
 void CloseConnection(q2_server_t *srv)
 {
     if (srv->publickey) {
         RSA_free(srv->publickey);
     }
-
-    /*
-    if (srv->addr) {
-        freeaddrinfo(srv->addr);
-    }
-    */
 
     if (srv->connection.d_ctx) {
         EVP_CIPHER_CTX_free(srv->connection.d_ctx);
@@ -505,11 +351,14 @@ void CloseConnection(q2_server_t *srv)
 }
 
 
+/**
+ * Create a listener socket and return it
+ */
 int get_listener_socket(void)
 {
     int listener;
     int yes = 1;
-    int rv;
+    int ret;
 
     struct addrinfo hints, *ai, *p;
 
@@ -519,9 +368,9 @@ int get_listener_socket(void)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
-        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
-        exit(1);
+    if ((ret = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(ret));
+        exit(EXIT_FAILURE);
     }
 
     for (p = ai; p != NULL; p = p->ai_next) {
@@ -559,10 +408,10 @@ int get_listener_socket(void)
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
+        return &(((struct sockaddr_in*) sa)->sin_addr);
     }
 
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return &(((struct sockaddr_in6*) sa)->sin6_addr);
 }
 
 static q2_server_t *get_server(uint32_t index)
@@ -625,11 +474,9 @@ static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
 }
 
 
-
-
-
 /**
- *
+ * Main program loop. Listen for incoming connections, process data from existing
+ * connections.
  */
 void RunServer(void)
 {
@@ -676,7 +523,7 @@ void RunServer(void)
                     newsocket = accept(listener, (struct sockaddr *) &remoteaddr, &addrlen);
 
                     if (newsocket == -1) {
-                        perror("accept");
+                        perror("[error] accept");
                     } else {
                         add_server_socket(newsocket);
 
@@ -729,27 +576,7 @@ void RunServer(void)
     }
 }
 
-/**
- * Catch things like ctrl+c to close open handles
- */
-void SignalCatcher(int sig)
-{
-	uint8_t i;
-	q2_server_t *srv;
 
-	// close all sockets and GTFO
-	if (sig == SIGINT) {
-
-		for (i=0; i<socket_count; i++) {
-			if (sockets[i].fd) {
-				close(sockets[i].fd);
-			}
-		}
-
-		CloseDatabase();
-		exit(EXIT_SUCCESS);
-	}
-}
 
 
 /**
