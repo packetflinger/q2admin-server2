@@ -28,92 +28,20 @@
 
 
 /**
- * Encrypt data using client's public key. Only their private key
- * will be able to decrypt it.
- */
-void Client_PublicKey_Encypher(q2_server_t *q2, byte *to, byte *from, int *len)
-{
-	RSA *publickey;
-	FILE *fp;
-	char keypath[20];
-	int bytes;
-
-	sprintf(keypath, "keys/%d.pub", q2->id);
-	fp = fopen(keypath, "rb");
-
-	publickey = PEM_read_RSAPublicKey(fp, NULL, NULL, NULL);
-	bytes = RSA_public_encrypt(CHALLENGE_LEN, from, to, publickey, RSA_PKCS1_PADDING);
-
-	*len = bytes;
-
-	RSA_free(publickey);
-	fclose(fp);
-}
-
-/**
- * Decrypt data using a client's public key. This will only work if the
- * data was encrypted using the corresponding private key
- */
-size_t Client_Challenge_Decrypt(q2_server_t *q2, byte *to, byte *from)
-{
-	size_t cypherlen;
-	cypherlen = RSA_public_decrypt(RSA_size(q2->publickey), from, to, q2->publickey, RSA_PKCS1_PADDING);
-	return cypherlen;
-}
-
-/**
- * Encrypt data using the server's private key
- */
-uint32_t Server_PrivateKey_Encypher(byte *to, byte *from)
-{
-	RSA *privatekey;
-	FILE *fp;
-	size_t cypherlen;
-
-	fp = fopen("server-private.key", "rb");
-
-	privatekey = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
-	cypherlen = RSA_private_encrypt(CHALLENGE_LEN, from, to, privatekey, RSA_PKCS1_PADDING);
-
-	RSA_free(privatekey);
-	fclose(fp);
-
-	return cypherlen;
-}
-
-/**
- * Decrypt data using server's private key
- */
-uint32_t Server_PrivateKey_Decypher(byte *to, byte *from)
-{
-	RSA *privatekey;
-	FILE *fp;
-	size_t cypherlen;
-
-	fp = fopen("server-private.key", "rb");
-
-	privatekey = PEM_read_RSAPrivateKey(fp, NULL, NULL, NULL);
-	cypherlen = RSA_private_decrypt(CHALLENGE_LEN, from, to, privatekey, RSA_PKCS1_PADDING);
-
-	RSA_free(privatekey);
-	fclose(fp);
-
-	return cypherlen;
-}
-
-/**
- * Encrypt the client-provided challenge with our private key to authenticate us
+ * Encrypt the client-provided challenge with our private key to authenticate us.
+ *
+ * length of *to should be the same as the key length or RSA_size() (2048 for us)
  */
 size_t Sign_Client_Challenge(byte *to, byte *from)
 {
 	RSA *privatekey;
 	FILE *fp;
-	size_t cypherlen;
+	size_t cipherlen;
 
 	fp = fopen(config.private_key, "rb");
 
 	if (!fp) {
-	    printf("* unable to open private key: %s *\n", config.private_key);
+	    printf("[error] unable to open private key: %s *\n", config.private_key);
 	    return 0;
 	}
 
@@ -121,20 +49,18 @@ size_t Sign_Client_Challenge(byte *to, byte *from)
 	privatekey = PEM_read_RSAPrivateKey(fp, &privatekey, NULL, NULL);
 
 	if (!privatekey) {
-	    printf("* error loading private key *\n");
+	    printf("[error] problems loading private key *\n");
 	    return 0;
 	}
 
-	cypherlen = RSA_private_encrypt(CHALLENGE_LEN, from, to, privatekey, RSA_PKCS1_PADDING);
+	cipherlen = RSA_private_encrypt(CHALLENGE_LEN, from, to, privatekey, RSA_PKCS1_PADDING);
 
 	RSA_free(privatekey);
 	fclose(fp);
 
-	return cypherlen;
+	return cipherlen;
 }
 
-void Verify_Client_Challenge() {
-}
 
 /**
  * This is the symmetric AES key for encrypting messages between client/server.
