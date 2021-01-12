@@ -394,6 +394,7 @@ void    OpenDatabase(void);
 void    CloseDatabase(void);
 
 // util.c
+void SendError(q2_server_t *server, ra_error_t error, uint8_t id, const char *msg);
 void SignalCatcher(int sig);
 void TestThreading(void *arg);
 char *va(const char *format, ...);

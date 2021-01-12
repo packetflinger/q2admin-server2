@@ -348,6 +348,8 @@ void CloseConnection(q2_server_t *srv)
 
     close(srv->socket);
     srv->connected = false;
+    srv->index = 0;
+
     printf("%s disconnected\n", srv->name);
     remove_server_socket();
 }
@@ -454,16 +456,11 @@ static q2_server_t *new_server(msg_buffer_t *msg, uint32_t index)
 
             LoadClientPublicKey(q2);
 
-            printf("Found server and loaded key: %d\n", &q2->publickey);
-
             if (!ServerAuthResponse(q2, h.challenge)) {
-                MSG_WriteByte(SCMD_ERROR, &q2->msg);
-                MSG_WriteByte(-1, &q2->msg);
-                MSG_WriteByte(ERR_ENCRYPTION, &q2->msg);
-                MSG_WriteString("Problem encrypting sv_challenge", &q2->msg);
-                SendBuffer(q2);
+                SendError(q2, ERR_ENCRYPTION, -1,
+                        "Problems encrypting sv_challenge"
+                );
 
-                //ERR_CloseConnection(q2);
                 return NULL;
             }
 

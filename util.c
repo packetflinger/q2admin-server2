@@ -73,6 +73,19 @@ void printdata(byte *data, int size)
 
 
 /**
+ * Send an error message to a client
+ */
+void SendError(q2_server_t *server, ra_error_t error, uint8_t id, const char *msg)
+{
+    MSG_WriteByte(SCMD_ERROR, &server->msg);
+    MSG_WriteByte(id, &server->msg);
+    MSG_WriteByte(error, &server->msg);
+    MSG_WriteString(msg, &server->msg);
+    SendBuffer(server);
+}
+
+
+/**
  * Catch things like ctrl+c to close open handles
  */
 void SignalCatcher(int sig)
