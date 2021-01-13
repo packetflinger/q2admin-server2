@@ -1,5 +1,14 @@
 #include "server.h"
 
+
+void IPFromSocket(char *dest, uint32_t socket)
+{
+    //struct sockaddr_in sa;
+
+    //getsockname(socket, (struct sockaddr *) &sa, sizeof(struct sockaddr_in));
+    //inet_ntop(AF_INET, &sa.sin_addr, dest, )
+}
+
 /**
  * Helper for printing out binary keys and ciphertext as hex
  */
