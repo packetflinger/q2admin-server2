@@ -368,7 +368,7 @@ int get_listener_socket(void)
 
     // Get us a socket and bind it
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -385,6 +385,10 @@ int get_listener_socket(void)
 
         // Lose the pesky "address already in use" error message
         setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+
+        // turn off IPv6 only, for v4 + v6 support
+        yes = 0;
+        setsockopt(listener, IPPROTO_IPV6, IPV6_V6ONLY, &yes, sizeof(int));
 
         if (bind(listener, p->ai_addr, p->ai_addrlen) < 0) {
             close(listener);
@@ -561,7 +565,9 @@ void RunServer(void)
                         if (!q2) {
                             peer = MSG_ReadLong(&msg);
                             if (peer == 0) {
+                                //printf("[info] Peer")
                                 ParsePeerRequest(&msg, i);
+                                remove_server_socket();
                                 continue;
                             }
 
