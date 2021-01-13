@@ -48,6 +48,9 @@
 #define q_offsetof(t, m)    ((size_t)&((t *)0)->m)
 #endif
 
+#define MAGIC_CLIENT    (('C' << 24) + ('A' << 16) + ('2' << 8) + 'Q')
+#define MAGIC_PEER      (('P' << 24) + ('A' << 16) + ('2' << 8) + 'Q')
+
 #define clamp(a,b,c)    ((a)<(b)?(a)=(b):(a)>(c)?(a)=(c):(a))
 #define random()        ((rand () & 0x7fff) / ((float)0x7fff))
 #define ROUNDF(f,c)     (((float)((int)((f) * (c))) / (c)))

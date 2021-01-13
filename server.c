@@ -564,9 +564,16 @@ void RunServer(void)
                     } else {
                         if (!q2) {
                             peer = MSG_ReadLong(&msg);
-                            if (peer == 0) {
-                                //printf("[info] Peer")
+                            if (peer == MAGIC_PEER) {
+                                printf("[info] peer connected\n");
                                 ParsePeerRequest(&msg, i);
+                                remove_server_socket();
+                                continue;
+                            }
+
+                            if (peer != MAGIC_CLIENT) {
+                                printf("[warn] Invalid client, closing connection\n");
+                                close(sockets[i].fd);
                                 remove_server_socket();
                                 continue;
                             }
