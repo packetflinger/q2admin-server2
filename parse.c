@@ -257,7 +257,7 @@ void ParsePeerRequest(msg_buffer_t *in, uint32_t index)
 
     switch (MSG_ReadByte(in)) {
     case PEER_GETSERVERS:
-        P_GetServerList();
+        P_GetServerList(index);
         break;
     }
 }

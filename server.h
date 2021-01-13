@@ -397,5 +397,5 @@ void        TestThreading(void *arg);
 char        *va(const char *format, ...);
 
 // peer.c
-void        P_GetServerList(void);
+void        P_GetServerList(uint32_t index);
 #endif
