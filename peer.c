@@ -19,6 +19,8 @@ void P_GetServerList(uint32_t index)
     byte ipdata[4];
     uint16_t count = 0;
 
+    printf("[info] peer connected\n");
+
     FOR_EACH_SERVER(s) {
         if (s->connected && s->trusted) {
             count++;
@@ -31,8 +33,9 @@ void P_GetServerList(uint32_t index)
     FOR_EACH_SERVER(s) {
         if (s->connected && s->trusted) {
             ip_to_bytes(s->ip, ipdata);
-            MSG_WriteData(ipdata, 4, &msg);
+            MSG_WriteData(ipdata, 4, &msg); // q2 is ipv4 only, so always 4 bytes
             MSG_WriteShort(s->port, &msg);
+            MSG_WriteString(s->name, &msg);
         }
     }
 
