@@ -13,12 +13,24 @@ uint32_t socket_count = 0;
 /**
  * Loads config from file. Uses glib2's ini parsing stuff
  */
-void LoadConfig(char *filename)
+void LoadConfig(int argcount, char **arguments)
 {
-	// problems reading file, just use default port
+    char *filename;
+    gchar *val;
+    gint val2;
+
+    filename = (argcount == 2) ? arguments[1] : CONFIGFILE;
+
+	// not an existing file, load defaults
 	if (access(filename, F_OK) == -1) {
-	    printf("Problems loading config file '%s', aborting.\n", filename);
-	    exit(EXIT_FAILURE);
+	    config.port = 9988;
+	    config.threads = 2;
+	    strncpy(config.db_file, "server.db", sizeof(config.db_file));
+	    strncpy(config.private_key, "private.pem", sizeof(config.private_key));
+	    strncpy(config.public_key, "public.pem", sizeof(config.public_key));
+
+	    printf("Loaded default config\n");
+	    return;
 	}
 
 	printf("Loading config from '%s'\n", filename);
@@ -33,25 +45,37 @@ void LoadConfig(char *filename)
 	    return;
 	}
 
-	gchar *val;
-	gint val2;
+
 
 	val = g_key_file_get_string(key_file, "database", "file", &error);
 	if (val) {
 	    strncpy(config.db_file, val, sizeof(config.db_file));
+	} else {
+	    strncpy(config.db_file, "server.db", sizeof(config.db_file));
+	    error = NULL;
 	}
 
 	val2 = g_key_file_get_integer(key_file, "server", "port", &error);
-	config.port = (uint16_t) val2;
+	config.port = (val2) ? (uint16_t) clamp(val2, 1, 65534) : 9988;
 
 	val2 = g_key_file_get_integer(key_file, "server", "threads", &error);
 	config.threads = (val2) ? clamp(val2, 1, 8) : 2;
 
 	val = g_key_file_get_string(key_file, "crypto", "private_key", &error);
-	strncpy(config.private_key, val, sizeof(config.private_key));
+	if (val) {
+	    strncpy(config.private_key, val, sizeof(config.private_key));
+	} else {
+	    strncpy(config.private_key, "private.pem", sizeof(config.private_key));
+	    error = NULL;
+	}
 
 	val = g_key_file_get_string(key_file, "crypto", "public_key", &error);
-	strncpy(config.public_key, val, sizeof(config.public_key));
+	if (val) {
+	    strncpy(config.public_key, val, sizeof(config.public_key));
+	} else {
+	    strncpy(config.public_key, "public.pem", sizeof(config.public_key));
+	    error = NULL;
+	}
 
 	g_free(val);
 }
@@ -627,7 +651,7 @@ int main(int argc, char **argv)
 {
 	signal(SIGINT, SignalCatcher);
 
-	LoadConfig(CONFIGFILE);
+	LoadConfig(argc, argv);
 	OpenDatabase();
 	LoadServers();
 	RunServer();
