@@ -330,6 +330,17 @@ void remove_server_socket()
 
 
 /**
+ * Some random connection, notify and close it
+ */
+void InvalidClient(uint32_t socket)
+{
+    printf("[warn] Invalid client, closing connection\n");
+    close(socket);
+    remove_server_socket();
+}
+
+
+/**
  * Close the connection to the client and free any resources it consumed
  */
 void CloseConnection(q2_server_t *srv)
@@ -564,27 +575,23 @@ void RunServer(void)
                     } else {
                         if (!q2) {
                             peer = MSG_ReadLong(&msg);
+
                             if (peer == MAGIC_PEER) {
-                                printf("[info] peer connected\n");
                                 ParsePeerRequest(&msg, i);
                                 remove_server_socket();
                                 continue;
                             }
 
                             if (peer != MAGIC_CLIENT) {
-                                printf("[warn] Invalid client, closing connection\n");
-                                close(sockets[i].fd);
-                                remove_server_socket();
+                                InvalidClient(sockets[i].fd);
                                 continue;
                             }
 
                             q2 = new_server(&msg, i);
 
-                            // not a real client, hang up and move on
+                            // probably a real q2 client, but not registered or enabled
                             if (!q2) {
-                                printf("[warn] Invalid client, closing connection\n");
-                                close(sockets[i].fd);
-                                remove_server_socket();
+                                InvalidClient(sockets[i].fd);
                                 continue;
                             }
                         }
