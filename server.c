@@ -65,6 +65,7 @@ void FreeServers(q2_server_t *listhead)
 	}
 }
 
+
 /**
  * Fetch enabled servers from the database and load into a list
  */
@@ -129,6 +130,7 @@ q2_server_t *find_server(uint32_t key)
 	return NULL;
 }
 
+
 /**
  * Get the server entry based on the supplied key
  */
@@ -144,6 +146,7 @@ q2_server_t *find_server_by_name(const char *name)
 
 	return NULL;
 }
+
 
 /**
  * Send a reply to a q2 server PING request
@@ -223,6 +226,7 @@ bool ServerAuthResponse(q2_server_t *q2, byte *challenge)
 
     return true;
 }
+
 
 /**
  * Decrypt the nonce the client returned to us. If it matches the client is trusted
@@ -377,7 +381,6 @@ int get_listener_socket(void)
 
     struct addrinfo hints, *ai, *p;
 
-    // Get us a socket and bind it
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_STREAM;
@@ -409,14 +412,12 @@ int get_listener_socket(void)
         break;
     }
 
-    freeaddrinfo(ai); // All done with this
+    freeaddrinfo(ai);
 
-    // If we got here, it means we didn't get bound
     if (p == NULL) {
         return -1;
     }
 
-    // Listen
     if (listen(listener, 10) == -1) {
         return -1;
     }
@@ -424,6 +425,10 @@ int get_listener_socket(void)
     return listener;
 }
 
+
+/**
+ * Get the right structure for v4 vs v6 addresses
+ */
 void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -433,6 +438,11 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*) sa)->sin6_addr);
 }
 
+
+/**
+ * Find the currently connected server object based on the
+ * supplied index.
+ */
 static q2_server_t *get_server(uint32_t index)
 {
     q2_server_t *q2;
@@ -445,6 +455,7 @@ static q2_server_t *get_server(uint32_t index)
 
     return NULL;
 }
+
 
 /**
  * Identify the new incoming server connection
@@ -603,8 +614,6 @@ void RunServer(void)
         }
     }
 }
-
-
 
 
 /**
