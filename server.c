@@ -34,14 +34,18 @@ void LoadConfig(char *filename)
 	}
 
 	gchar *val;
+	gint val2;
 
 	val = g_key_file_get_string(key_file, "database", "file", &error);
 	if (val) {
 	    strncpy(config.db_file, val, sizeof(config.db_file));
 	}
 
-	gint val2 = g_key_file_get_integer(key_file, "server", "port", &error);
+	val2 = g_key_file_get_integer(key_file, "server", "port", &error);
 	config.port = (uint16_t) val2;
+
+	val2 = g_key_file_get_integer(key_file, "server", "threads", &error);
+	config.threads = (val2) ? clamp(val2, 1, 8) : 2;
 
 	val = g_key_file_get_string(key_file, "crypto", "private_key", &error);
 	strncpy(config.private_key, val, sizeof(config.private_key));
@@ -518,7 +522,7 @@ void RunServer(void)
     socklen_t addrlen;
     char remote_addr[INET6_ADDRSTRLEN];
 
-    pool = thpool_init(2);
+    pool = thpool_init(config.threads);
 
     FOR_EACH_SERVER(q2) {
         socket_size++;

@@ -115,6 +115,7 @@ msg_buffer_t msg;
  * General configuration options for the main q2admin process
  */
 typedef struct {
+    uint8_t threads;        // additional threads
     uint16_t port;
     char db_file[50];       // sqlite db file
     char private_key[50];   // our key pair
