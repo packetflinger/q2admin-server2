@@ -607,6 +607,7 @@ void RunServer(void)
                         }
 
                         q2->connected = false;
+                        q2->index = 0;
                         q2->socket = 0;
                         close(sockets[i].fd);
                         remove_server_socket();
