@@ -10,7 +10,7 @@ void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
     msg_buffer_t e;
 
     // decrypt if necessary
-    if (q2->connection.encrypted) {
+    if (q2->connection.encrypted && q2->trusted) {
         memset(&e, 0, sizeof(msg_buffer_t));
         e.length = SymmetricDecrypt(q2, e.data, msg->data, msg->length);
         memset(msg, 0, sizeof(msg_buffer_t));

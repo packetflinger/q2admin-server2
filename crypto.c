@@ -131,12 +131,12 @@ size_t SymmetricDecrypt(q2_server_t *q2, byte *dest, byte *src, size_t src_len)
         return 0;
     }
 
-    EVP_DecryptInit_ex(
-            q2->connection.d_ctx,
+    EVP_DecryptInit_ex (
+            c->d_ctx,
             EVP_aes_128_cbc(),
             NULL,
-            q2->connection.aeskey,
-            q2->connection.iv
+            c->aeskey,
+            c->iv
     );
 
     EVP_DecryptUpdate(c->d_ctx, dest + dest_len, &dest_len, src, src_len);
