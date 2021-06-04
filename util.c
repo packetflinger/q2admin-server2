@@ -202,3 +202,14 @@ char *va(const char *format, ...)
 
     return string;
 }
+
+/**
+ * Add text to the message buffer for a particular client on a server
+ */
+void ClientText(q2_server_t *srv, uint8_t cl, uint32_t type, char *text)
+{
+    MSG_WriteByte(SCMD_SAYCLIENT, &srv->msg);
+    MSG_WriteByte(cl, &srv->msg);
+    MSG_WriteByte(type, &srv->msg);
+    MSG_WriteString(text, &srv->msg);
+}

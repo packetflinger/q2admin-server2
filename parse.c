@@ -130,15 +130,13 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
     char *reply;
     q2_server_t *server, *found = 0;
 
+    printf("Handling teleport command\n");
     client_id = MSG_ReadByte(in);
     location = MSG_ReadString(in);
 
     // player just issued teleport command with no arg, show available servers
     if (!*location) {
-        MSG_WriteByte(SCMD_SAYCLIENT, &srv->msg);
-        MSG_WriteByte(client_id, &srv->msg);
-        MSG_WriteByte(PRINT_HIGH, &srv->msg);
-        MSG_WriteString("Todo: show available servers\n", &srv->msg);
+        ClientText(srv, client_id, PRINT_HIGH, "Todo: show available servers\n");
         SendBuffer(srv);
         return;
     }
@@ -150,16 +148,18 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
     }
 
     // do stuff
-    reply = va("sending you to %s:%d\n", found->ip, found->port);
-    char *stuff = va("sv !stuff CL %d connect %s:%d", client_id, found->ip, found->port);
+    if (found) {
+        reply = va("sending you to %s:%d\n", found->ip, found->port);
+        char *stuff = va("sv !stuff CL %d connect %s:%d", client_id, found->ip, found->port);
 
-    MSG_WriteByte(SCMD_SAYCLIENT, &srv->msg);
-    MSG_WriteByte(client_id, &srv->msg);
-    MSG_WriteByte(PRINT_HIGH, &srv->msg);
-    MSG_WriteString(reply, &srv->msg);
+        ClientText(srv, client_id, PRINT_HIGH, reply);
 
-    MSG_WriteByte(SCMD_COMMAND, &srv->msg);
-    MSG_WriteString(stuff, &srv->msg);
+        MSG_WriteByte(SCMD_COMMAND, &srv->msg);
+        MSG_WriteString(stuff, &srv->msg);
+    } else {
+        reply = va("\"%s\" could not be located\n", location);
+        ClientText(srv, client_id, PRINT_HIGH, reply);
+    }
 
     SendBuffer(srv);
 }

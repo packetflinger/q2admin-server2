@@ -399,6 +399,7 @@ void        SendError(q2_server_t *server, ra_error_t error, uint8_t id, const c
 void        SignalCatcher(int sig);
 void        TestThreading(void *arg);
 char        *va(const char *format, ...);
+void        ClientText(q2_server_t *srv, uint8_t cl, uint32_t type, char *text);
 
 // peer.c
 void        P_GetServerList(uint32_t index);
