@@ -400,6 +400,7 @@ void        SignalCatcher(int sig);
 void        TestThreading(void *arg);
 char        *va(const char *format, ...);
 void        ClientText(q2_server_t *srv, uint8_t cl, uint32_t type, char *text);
+char        *BuildTeleportServers(void);
 
 // peer.c
 void        P_GetServerList(uint32_t index);

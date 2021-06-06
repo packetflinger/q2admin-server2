@@ -22,6 +22,12 @@ void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
 
     // keep parsing msgs while data is in the buffer
     while (msg->index < msg->length) {
+
+        // this should never happen, but teleport command is causing it
+        if (msg->index > sizeof(msg->data)) {
+            break;
+        }
+
         cmd = MSG_ReadByte(msg);
 
         switch(cmd) {
@@ -129,14 +135,15 @@ void ParseTeleport(q2_server_t *srv, msg_buffer_t *in)
     char *location;
     char *reply;
     q2_server_t *server, *found = 0;
+    char *srvstr;
 
-    printf("Handling teleport command\n");
     client_id = MSG_ReadByte(in);
     location = MSG_ReadString(in);
 
     // player just issued teleport command with no arg, show available servers
     if (!*location) {
-        ClientText(srv, client_id, PRINT_HIGH, "Todo: show available servers\n");
+        srvstr = BuildTeleportServers();
+        ClientText(srv, client_id, PRINT_HIGH, srvstr);
         SendBuffer(srv);
         return;
     }

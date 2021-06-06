@@ -213,3 +213,38 @@ void ClientText(q2_server_t *srv, uint8_t cl, uint32_t type, char *text)
     MSG_WriteByte(type, &srv->msg);
     MSG_WriteString(text, &srv->msg);
 }
+
+/**
+ * Build a string of all available servers
+ */
+char *BuildTeleportServers(void)
+{
+    q2_server_t *server;
+    static char *str = "\n";
+    char line[100];
+    char players[300];
+    uint16_t index = 0;
+    uint8_t i;
+
+    FOR_EACH_SERVER(server) {
+        if (!server->trusted) {
+            continue;
+        }
+
+        memset(players, 0, sizeof(players));
+        memset(line, 0, sizeof(line));
+
+        // collect player names
+        for (i=0; i<server->playercount; i++) {
+            strcat(players, va("%s, ", server->players[i].name));
+        }
+
+        // remove the last comma and space
+        players[strlen(players) - 2] = 0;
+
+        snprintf(line, sizeof(line), "%-17s %s (%d/%d) %s", server->name, server->map, server->playercount, server->maxclients, players);
+        str = va("%s%s\n", str, line);
+    }
+
+    return str;
+}
