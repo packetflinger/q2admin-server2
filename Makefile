@@ -1,7 +1,7 @@
 -include .config
 
-GLIB_CFLAGS = $(shell pkg-config --cflags glib-2.0)
-GLIB_LDFLAGS = $(shell pkg-config --libs glib-2.0)
+GLIB_CFLAGS ?= $(shell pkg-config --cflags glib-2.0)
+GLIB_LDFLAGS ?= $(shell pkg-config --libs glib-2.0)
 
 CC ?= gcc
 LD ?= ld
