@@ -116,6 +116,7 @@ msg_buffer_t msg;
  */
 typedef struct {
     uint8_t threads;        // additional threads
+    uint8_t debug;
     uint16_t port;
     char db_file[50];       // sqlite db file
     char private_key[50];   // our key pair
@@ -157,6 +158,7 @@ typedef struct {
     EVP_CIPHER_CTX      *d_ctx;     // decrypting context
     bool                encrypted;
     byte                cl_challenge[CHALLENGE_LEN];
+    uint32_t            ping_count;
     list_t              entry;
 } connection_t;
 
@@ -255,7 +257,7 @@ typedef enum {
     CMD_FRAG,          // someone fragged someone else
     CMD_MAP,           // map changed
     CMD_PING,           //
-    CMD_AUTH
+    CMD_AUTH,
 } ra_client_cmd_t;
 
 
@@ -272,6 +274,7 @@ typedef enum {
     SCMD_SAYALL,
     SCMD_AUTH,
     SCMD_TRUSTED,
+    SCMD_KEY,
 } ra_server_cmd_t;
 
 

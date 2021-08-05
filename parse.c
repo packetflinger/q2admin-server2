@@ -18,7 +18,9 @@ void ParseMessage(q2_server_t *q2, msg_buffer_t *msg)
         msg->length = e.length;
     }
 
-    hexDump("New Message", msg->data, msg->length);
+    if (config.debug) {
+        hexDump("New Message", msg->data, msg->length);
+    }
 
     // keep parsing msgs while data is in the buffer
     while (msg->index < msg->length) {

@@ -25,6 +25,7 @@ void LoadConfig(int argcount, char **arguments)
 	if (access(filename, F_OK) == -1) {
 	    config.port = 9988;
 	    config.threads = 2;
+	    config.debug = 0;
 	    strncpy(config.db_file, "server.db", sizeof(config.db_file));
 	    strncpy(config.private_key, "private.pem", sizeof(config.private_key));
 	    strncpy(config.public_key, "public.pem", sizeof(config.public_key));
@@ -57,6 +58,9 @@ void LoadConfig(int argcount, char **arguments)
 
 	val2 = g_key_file_get_integer(key_file, "server", "port", &error);
 	config.port = (val2) ? (uint16_t) clamp(val2, 1, 65534) : 9988;
+
+	val2 = g_key_file_get_integer(key_file, "server", "debug", &error);
+	config.debug = (val2) ? (uint8_t) clamp(val2, 0, 1) : 0;
 
 	val2 = g_key_file_get_integer(key_file, "server", "threads", &error);
 	config.threads = (val2) ? clamp(val2, 1, 8) : 2;
@@ -182,6 +186,19 @@ q2_server_t *find_server_by_name(const char *name)
 void Pong(q2_server_t *srv)
 {
 	MSG_WriteByte(SCMD_PONG, &srv->msg);
+
+	srv->connection.ping_count++;
+	if (srv->connection.encrypted && srv->connection.ping_count % 3 == 0) {
+	    // generate some new keys
+	    //RAND_bytes(srv->connection.aeskey, AESKEY_LEN);
+	    //RAND_bytes(srv->connection.iv, AESBLOCK_LEN);
+
+	    // send em
+	    //MSG_WriteByte(SCMD_KEY, &srv->msg);
+	    //MSG_WriteData(srv->connection.aeskey, AESKEY_LEN, &srv->msg);
+	    //MSG_WriteData(srv->connection.iv, AESBLOCK_LEN, &srv->msg);
+	}
+
 	SendBuffer(srv);
 }
 

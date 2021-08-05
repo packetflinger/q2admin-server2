@@ -220,11 +220,13 @@ void ClientText(q2_server_t *srv, uint8_t cl, uint32_t type, char *text)
 char *BuildTeleportServers(void)
 {
     q2_server_t *server;
-    static char *str = "\n";
+    static char *str;
     char line[100];
     char players[300];
     uint16_t index = 0;
     uint8_t i;
+
+    str = "\n";
 
     FOR_EACH_SERVER(server) {
         if (!server->trusted) {
